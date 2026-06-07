@@ -1,0 +1,50 @@
+{
+  "name": "system-trace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Privacy-first, local-first, cross-platform screen-time tracker.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.51.0",
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.0.0",
+    "lucide-react": "^0.451.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "uplot": "^1.6.31"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.35.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "postcss": "^8.4.45",
+    "prettier": "^3.3.3",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.3"
+  }
+}

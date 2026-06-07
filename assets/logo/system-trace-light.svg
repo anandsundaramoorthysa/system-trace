@@ -1,0 +1,38 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="waveDL" x1="100" y1="256" x2="412" y2="256" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5A0"/>
+      <stop offset="1" stop-color="#2EA043"/>
+    </linearGradient>
+    <radialGradient id="sweepDL" cx="256" cy="256" r="172" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5A0" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#0EA5A0" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="scopeDL"><circle cx="256" cy="256" r="168"/></clipPath>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="#FFFFFF"/>
+  <rect x="1" y="1" width="510" height="510" rx="111" stroke="#D0D7DE" stroke-width="2"/>
+
+  <!-- inside the scope -->
+  <g clip-path="url(#scopeDL)">
+    <!-- radar sweep wedge -->
+    <path d="M256 256 L256 80 A176 176 0 0 1 432 256 Z" fill="url(#sweepDL)"/>
+    <!-- crosshair -->
+    <path d="M256 80 V432 M80 256 H432" stroke="#0EA5A0" stroke-width="3" stroke-opacity="0.16"/>
+    <!-- inner scope ring -->
+    <circle cx="256" cy="256" r="108" stroke="#0EA5A0" stroke-width="5" stroke-opacity="0.35" fill="none"/>
+    <!-- the live pulse / activity trace -->
+    <path d="M88 256 H168 L196 256 L224 206 L252 318 L282 150 L312 322 L342 256 L368 256 H424"
+          stroke="url(#waveDL)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"
+          fill="none"/>
+  </g>
+
+  <!-- outer scope ring -->
+  <circle cx="256" cy="256" r="172" stroke="#0EA5A0" stroke-width="6" stroke-opacity="0.55" fill="none"/>
+  <!-- tracked node at the signal peak -->
+  <circle cx="282" cy="150" r="15" fill="#2EA043"/>
+  <circle cx="282" cy="150" r="6" fill="#FFFFFF"/>
+  <!-- center node -->
+  <circle cx="256" cy="256" r="9" fill="#0EA5A0"/>
+</svg>

@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+.pnpm-store/
+
+# Build output
+dist/
+build/
+out/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Rust / Tauri
+# Note: Cargo.lock IS committed (this is an application, not a library).
+target/
+app/src-tauri/target/
+app/src-tauri/gen/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing (Playwright)
+playwright-report/
+test-results/
+.playwright-mcp/
+
+# Local databases (the tool's own local data should never be committed)
+*.sqlite
+*.sqlite3
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Internal planning and AI-assistant docs (excluded from the public release).
+# Public docs kept: README, LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY,
+# CHANGELOG, docs/SYSTEM_DESIGN.md, docs/FEATURES.md.
+CLAUDE.md
+DECISIONS.md
+docs/BRAND.md
+docs/CONVENTIONS.md
+docs/DESIGN_SPEC.md
+docs/DISTRIBUTION.md
+docs/PROJECT_PLAN.md
+docs/TECH_STACK.md

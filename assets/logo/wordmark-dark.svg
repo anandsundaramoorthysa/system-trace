@@ -1,0 +1,25 @@
+<svg width="620" height="180" viewBox="0 0 620 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wmwaveD" x1="34" y1="90" x2="126" y2="90" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2DD4BF"/><stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <clipPath id="wmclipD"><circle cx="80" cy="90" r="48"/></clipPath>
+  </defs>
+
+  <!-- icon tile -->
+  <rect x="20" y="30" width="120" height="120" rx="28" fill="#0D1117" stroke="#21262D" stroke-width="1.5"/>
+  <g clip-path="url(#wmclipD)">
+    <circle cx="80" cy="90" r="28" stroke="#2DD4BF" stroke-width="2.5" stroke-opacity="0.30" fill="none"/>
+    <path d="M30 90 H56 L64 90 L72 74 L82 110 L92 62 L102 112 L112 90 L120 90 H130"
+          stroke="url(#wmwaveD)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+  <circle cx="80" cy="90" r="46" stroke="#2DD4BF" stroke-width="3" stroke-opacity="0.45" fill="none"/>
+  <circle cx="92" cy="62" r="6" fill="#34D399"/>
+  <circle cx="80" cy="90" r="3" fill="#2DD4BF"/>
+
+  <!-- wordmark -->
+  <text x="172" y="113" font-family="Inter, -apple-system, Segoe UI, Roboto, sans-serif"
+        font-size="62" font-weight="700" letter-spacing="-1.5">
+    <tspan fill="#E6EDF3">System </tspan><tspan fill="#2DD4BF">Trace</tspan>
+  </text>
+</svg>

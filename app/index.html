@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>System Trace</title>
+    <!--
+      First-paint theme resolution to avoid a light-then-dark flash on launch
+      (DESIGN_SPEC.md section 9). This runs before React mounts. It reads the
+      last theme the app persisted to localStorage as a fast hint; the
+      ThemeProvider later reconciles with the authoritative `theme` setting read
+      from the Rust core. No network, no activity data here.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("system-trace.theme");
+          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var dark = stored === "dark" || ((stored === "system" || !stored) && prefersDark);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {
+          // Ignore; ThemeProvider will set the class on mount.
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

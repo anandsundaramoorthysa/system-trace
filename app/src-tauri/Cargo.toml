@@ -1,0 +1,87 @@
+[package]
+name = "system-trace"
+version = "0.1.0"
+description = "Privacy-first, local-first, cross-platform screen-time tracker."
+authors = ["ANAND SUNDARAMOORTHY SA"]
+license = "MIT"
+repository = "https://github.com/anandsundaramoorthysa/System-Trace"
+edition = "2021"
+rust-version = "1.77"
+
+# The library crate that the Tauri app and tests share. `cargo test` runs the
+# pure core logic (idle/state machine, session builder, aggregation, migrations)
+# without touching the OS watchers.
+[lib]
+name = "system_trace_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "system-trace"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0.0", features = ["tray-icon", "image-png"] }
+tauri-plugin-dialog = "2.0.0"
+tauri-plugin-single-instance = "2.0.0"
+tauri-plugin-autostart = "2.0.0"
+tauri-plugin-notification = "2.0.0"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Local SQLite. rusqlite with the bundled SQLite (no system dependency), WAL is
+# enabled at runtime. Chosen over sqlx for a single-writer, synchronous core.
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Async runtime for the collector background task and scheduled services.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+
+# Time handling: UTC unix-millis storage, local-time day keys for rollups.
+chrono = { version = "0.4", features = ["clock"] }
+
+# Logging (no telemetry; local stderr/file only).
+log = "0.4"
+env_logger = "0.11"
+
+thiserror = "1"
+
+# ---- Per-OS watcher crates, gated behind cfg so each OS only builds its own ----
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Threading",
+    "Win32_System_ProcessStatus",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_SystemInformation",
+    "Win32_Media_Audio",
+    "Win32_System_Com",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.23"
+core-foundation = "0.9"
+cocoa = "0.25"
+objc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.13", features = ["screensaver"] }
+zbus = "4"
+
+[features]
+# By default Tauri uses a custom-protocol on all platforms; this feature is
+# enabled by the Tauri CLI for production builds.
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+# Keep the always-on agent small and lean (CONVENTIONS.md performance guardrails).
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
