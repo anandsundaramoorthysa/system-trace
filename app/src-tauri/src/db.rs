@@ -322,19 +322,25 @@ fn total_for_days(conn: &Connection, from: &str, to: &str) -> DbResult<i64> {
 /* ----------------------------- read: overviews ---------------------------- */
 
 pub fn today_overview(conn: &Connection) -> DbResult<TodayOverview> {
-    let day = today_key();
-    let total_ms = total_for_days(conn, &day, &day)?;
+    day_overview(conn, &today_key())
+}
 
-    let yesterday = (Local::now() - Duration::days(1))
-        .format("%Y-%m-%d")
-        .to_string();
-    let y_total = total_for_days(conn, &yesterday, &yesterday)?;
+/// Same shape as `today_overview` but for any arbitrary day key. Used by the
+/// Reports view's Day mode for historical drill-down. The `delta_vs_yesterday_ms`
+/// field compares to the day immediately preceding `day`. `active_app` is always
+/// `None` here; the live value only makes sense for today and is filled in by
+/// the command handler when needed.
+pub fn day_overview(conn: &Connection, day: &str) -> DbResult<TodayOverview> {
+    let date = parse_day(day)?;
+    let total_ms = total_for_days(conn, day, day)?;
 
-    let top_apps = usage_entries_for_days(conn, &day, &day, 8)?;
-    let by_category = category_usage_for_days(conn, &day, &day)?;
+    let prev = (date - Duration::days(1)).format("%Y-%m-%d").to_string();
+    let prev_total = total_for_days(conn, &prev, &prev)?;
+
+    let top_apps = usage_entries_for_days(conn, day, day, 8)?;
+    let by_category = category_usage_for_days(conn, day, day)?;
 
     // by_hour from raw events (start-hour attribution).
-    let date = parse_day(&day)?;
     let (start_ms, end_ms) = day_bounds(date);
     let mut hours = vec![0i64; 24];
     let mut app_switches = 0i64;
@@ -377,19 +383,17 @@ pub fn today_overview(conn: &Connection) -> DbResult<TodayOverview> {
         })
         .collect();
 
-    let active_app = None; // The live value comes from the usage_tick event.
-
     Ok(TodayOverview {
-        day,
+        day: day.to_string(),
         total_ms,
-        delta_vs_yesterday_ms: total_ms - y_total,
+        delta_vs_yesterday_ms: total_ms - prev_total,
         top_apps,
         by_category,
         by_hour,
         app_switches,
         longest_session_ms,
         longest_session_app,
-        active_app,
+        active_app: None,
     })
 }
 
@@ -1019,6 +1023,33 @@ mod tests {
         assert_eq!(ov.total_ms, 8_000);
         assert_eq!(ov.app_switches, 2);
         assert_eq!(ov.longest_session_ms, 5_000);
+    }
+
+    #[test]
+    fn day_overview_picks_arbitrary_past_day() {
+        let conn = mem();
+        // Seed today and two days ago with different totals.
+        let now = Local::now().timestamp_millis();
+        let two_days_ago = now - Duration::days(2).num_milliseconds();
+        insert_events(
+            &conn,
+            &[
+                ev("chrome", now, now + 4_000),
+                ev("code", two_days_ago, two_days_ago + 9_000),
+            ],
+        )
+        .unwrap();
+        let past_day = (Local::now() - Duration::days(2))
+            .format("%Y-%m-%d")
+            .to_string();
+        let ov = day_overview(&conn, &past_day).unwrap();
+        assert_eq!(ov.day, past_day);
+        assert_eq!(ov.total_ms, 9_000);
+        assert_eq!(ov.app_switches, 1);
+        assert_eq!(ov.longest_session_ms, 9_000);
+        assert_eq!(ov.longest_session_app.as_deref(), Some("code"));
+        // delta is vs the day before this past day (which has no usage).
+        assert_eq!(ov.delta_vs_yesterday_ms, 9_000);
     }
 
     #[test]

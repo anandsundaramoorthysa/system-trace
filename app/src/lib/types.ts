@@ -400,6 +400,7 @@ export const COMMAND = {
   // Dashboard / Reports
   GET_TODAY_OVERVIEW: "get_today_overview",
   GET_RANGE_OVERVIEW: "get_range_overview",
+  GET_DAY_OVERVIEW: "get_day_overview",
   // Apps / Categories
   GET_APPS: "get_apps",
   SET_APP_CATEGORY: "set_app_category",
@@ -460,6 +461,10 @@ export interface CommandMap {
   [COMMAND.GET_RANGE_OVERVIEW]: {
     args: { from: DayKey; to: DayKey };
     result: RangeOverview;
+  };
+  [COMMAND.GET_DAY_OVERVIEW]: {
+    args: { day: DayKey };
+    result: TodayOverview;
   };
   [COMMAND.GET_APPS]: {
     args: Record<string, never>;

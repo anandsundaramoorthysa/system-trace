@@ -105,6 +105,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_today_overview,
             commands::get_range_overview,
+            commands::get_day_overview,
             commands::get_apps,
             commands::set_app_category,
             commands::get_categories,

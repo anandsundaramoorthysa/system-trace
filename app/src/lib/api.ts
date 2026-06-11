@@ -59,6 +59,11 @@ export function getRangeOverview(from: string, to: string): Promise<RangeOvervie
   return invoke(COMMAND.GET_RANGE_OVERVIEW, { from, to });
 }
 
+export function getDayOverview(day: string): Promise<TodayOverview> {
+  if (!isTauri) return Promise.resolve(mockToday());
+  return invoke(COMMAND.GET_DAY_OVERVIEW, { day });
+}
+
 /* --------------------------- apps + categories ---------------------------- */
 
 export function getApps(): Promise<AppInfo[]> {

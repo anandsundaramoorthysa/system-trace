@@ -399,6 +399,7 @@ pub mod command {
     // Dashboard / Reports
     pub const GET_TODAY_OVERVIEW: &str = "get_today_overview";
     pub const GET_RANGE_OVERVIEW: &str = "get_range_overview";
+    pub const GET_DAY_OVERVIEW: &str = "get_day_overview";
     // Apps / Categories
     pub const GET_APPS: &str = "get_apps";
     pub const SET_APP_CATEGORY: &str = "set_app_category";

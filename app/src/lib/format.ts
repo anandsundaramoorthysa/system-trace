@@ -55,3 +55,65 @@ export function dayKeyOffset(days: number): DayKey {
   d.setDate(d.getDate() - days);
   return toDayKey(d);
 }
+
+/** Add N calendar days to a 'YYYY-MM-DD' key (negative N goes back). */
+export function addDays(day: DayKey, n: number): DayKey {
+  const d = parseDayKey(day);
+  d.setDate(d.getDate() + n);
+  return toDayKey(d);
+}
+
+/** Monday of the ISO week containing `day`. */
+export function startOfWeek(day: DayKey): DayKey {
+  const d = parseDayKey(day);
+  // getDay(): 0=Sun..6=Sat. Convert to Mon=0..Sun=6.
+  const dow = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - dow);
+  return toDayKey(d);
+}
+
+/** First day of the calendar month containing `day`. */
+export function startOfMonth(day: DayKey): DayKey {
+  const d = parseDayKey(day);
+  d.setDate(1);
+  return toDayKey(d);
+}
+
+/** First day of the next month after the one containing `day`. */
+export function startOfNextMonth(day: DayKey): DayKey {
+  const d = parseDayKey(day);
+  d.setDate(1);
+  d.setMonth(d.getMonth() + 1);
+  return toDayKey(d);
+}
+
+/** Full readable day, e.g. "Tue, 9 Jun 2026". */
+export function formatLongDay(day: DayKey): string {
+  return parseDayKey(day).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/** Week label, e.g. "Jun 8 - 14, 2026" or "Jun 29 - Jul 5, 2026". */
+export function formatWeekLabel(weekStart: DayKey): string {
+  const start = parseDayKey(weekStart);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const monthShort = (d: Date) => d.toLocaleDateString(undefined, { month: "short" });
+  const year = end.getFullYear();
+  if (start.getMonth() === end.getMonth()) {
+    return `${monthShort(start)} ${start.getDate()} - ${end.getDate()}, ${year}`;
+  }
+  return `${monthShort(start)} ${start.getDate()} - ${monthShort(end)} ${end.getDate()}, ${year}`;
+}
+
+/** Month label, e.g. "June 2026". */
+export function formatMonthLabel(monthStart: DayKey): string {
+  return parseDayKey(monthStart).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}

@@ -31,6 +31,12 @@ pub fn get_range_overview(state: State<AppState>, from: String, to: String) -> R
     db::range_overview(&conn, &from, &to)
 }
 
+#[tauri::command(rename_all = "snake_case")]
+pub fn get_day_overview(state: State<AppState>, day: String) -> R<TodayOverview> {
+    let conn = lock(&state.db)?;
+    db::day_overview(&conn, &day)
+}
+
 /* ----------------------------- apps + categories -------------------------- */
 
 #[tauri::command]
