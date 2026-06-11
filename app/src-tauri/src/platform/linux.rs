@@ -21,6 +21,12 @@ pub struct LinuxWatcher {
     conn: Option<(RustConnection, Window)>,
 }
 
+impl Default for LinuxWatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LinuxWatcher {
     pub fn new() -> Self {
         let conn = x11rb::connect(None).ok().map(|(c, screen)| {

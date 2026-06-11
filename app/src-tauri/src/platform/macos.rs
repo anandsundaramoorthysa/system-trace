@@ -9,6 +9,10 @@
 //! verified by the macOS CI job, not on a Windows dev box.
 
 #![cfg(target_os = "macos")]
+// The `objc` 0.2 crate's `msg_send!` / `class!` macros trip the newer
+// `unexpected_cfgs` lint via a `cargo-clippy` cfg check inside the macro body.
+// Silence at the module level; this is upstream noise, not our code.
+#![allow(unexpected_cfgs)]
 
 use super::{ActiveWindow, Watcher};
 use std::ffi::CStr;
