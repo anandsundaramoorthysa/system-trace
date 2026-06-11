@@ -47,6 +47,20 @@ data is yours: export it, delete it, or exclude apps at any time.
 The marketing website lives in a separate repository
 ([System-Trace-Website](https://github.com/anandsundaramoorthysa/System-Trace-Website)).
 
+## Screenshots
+
+**Dashboard**
+![Dashboard](docs/screenshots/dashboard-dark.png)
+
+**Limits and Focus**
+![Limits and Focus](docs/screenshots/limits-focus-dark.png)
+
+**Break Reminders and Wellbeing**
+![Break Reminders](docs/screenshots/break-wellbeing-dark.png)
+
+**Weekly Screen-Time Report**
+![Weekly Report](docs/screenshots/weekly-report-dark.png)
+
 ## Why System Trace
 
 | Capability | Cloud trackers (e.g. RescueTime) | Open trackers (e.g. ActivityWatch) | System Trace |
