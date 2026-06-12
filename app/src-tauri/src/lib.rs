@@ -42,20 +42,34 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
+            // Check for test mode to avoid polluting real user data.
+            let is_test = std::env::var("SYSTEM_TRACE_TEST_MODE").is_ok();
+
             // Local database in the OS app-data directory (no cloud).
             let dir = app
                 .path()
                 .app_data_dir()
                 .expect("could not resolve app data dir");
-            let db_path = dir.join("system-trace.sqlite");
+            
+            let db_path = if is_test {
+                std::env::temp_dir().join("system-trace-test.sqlite")
+            } else {
+                dir.join("system-trace.sqlite")
+            };
+
+            // If it's a new test run, we might want to wipe the test DB.
+            if is_test && db_path.exists() {
+                let _ = std::fs::remove_file(&db_path);
+            }
+
             let conn = db::open(&db_path).expect("failed to open database");
 
             let settings = db::get_settings(&conn).expect("failed to read settings");
             // Trim raw events past the retention window on startup.
             let _ = db::trim_old_events(&conn, settings.retention_days);
 
-            // Apply the launch-at-login preference.
-            {
+            // Apply the launch-at-login preference (skip in test mode).
+            if !is_test {
                 let mgr = app.autolaunch();
                 if settings.launch_at_login {
                     let _ = mgr.enable();
@@ -64,10 +78,12 @@ pub fn run() {
                 }
             }
 
+            let tracking_paused = if is_test { true } else { settings.tracking_paused };
+
             let shared = Arc::new(Mutex::new(Shared::new(
                 settings.idle_threshold_secs as u64 * 1000,
                 settings.capture_titles,
-                settings.tracking_paused,
+                tracking_paused,
             )));
             let db = Arc::new(Mutex::new(conn));
 

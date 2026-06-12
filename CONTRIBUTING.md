@@ -73,8 +73,24 @@ cargo test
 - TypeScript/React: ESLint + Prettier.
 - Rust: rustfmt for formatting, clippy for lints.
 - Tests: `cargo test` for the core (state machine, aggregation, retention), and
-  Playwright for UI flows. Add tests when you add behavior; the collector takes a
-  `Watcher` trait object so you can inject a fake watcher in tests.
+  WebdriverIO for E2E UI flows. Add tests when you add behavior; the collector
+  takes a `Watcher` trait object so you can inject a fake watcher in tests.
+
+### E2E Testing Setup
+
+To run E2E tests locally, you need `tauri-driver` and the platform's WebDriver:
+
+1. **Install tauri-driver**: `cargo install tauri-driver`
+2. **Install WebDriver**:
+   - **Linux**: `sudo apt install webkit2gtk-driver`
+   - **Windows**: [Edge WebDriver](https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/)
+   - **macOS**: Comes with Safari (`safaridriver --enable`)
+3. **Run tests**:
+   ```bash
+   cd app
+   pnpm tauri build --debug
+   pnpm test:e2e
+   ```
 
 ## Pull request process
 

@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node", "webdriverio", "@wdio/mocha-framework", "expect-webdriverio"],
+    "skipLibCheck": true,
+    "strict": true,
+    "esModuleInterop": true
+  }
+}
