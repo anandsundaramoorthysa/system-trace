@@ -1,8 +1,16 @@
-import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 
-let tauriDriver: ChildProcess;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Paths relative to this config file (e2e/)
+const appRoot = path.resolve(__dirname, '..');
+const tauriRoot = path.resolve(appRoot, 'src-tauri');
+const buildMode = process.env.NODE_ENV === 'production' ? 'release' : 'debug';
+const binaryName = os.platform() === 'win32' ? 'system-trace.exe' : 'system-trace';
+const binaryPath = path.resolve(tauriRoot, 'target', buildMode, binaryName);
 
 export const config: WebdriverIO.Config = {
     //
@@ -44,13 +52,7 @@ export const config: WebdriverIO.Config = {
     capabilities: [{
         browserName: 'wry',
         'tauri:options': {
-            application: path.resolve(
-                process.cwd(),
-                'src-tauri',
-                'target',
-                process.env.NODE_ENV === 'production' ? 'release' : 'debug',
-                os.platform() === 'win32' ? 'system-trace.exe' : 'system-trace'
-            ),
+            application: binaryPath,
         },
     }],
     
@@ -66,7 +68,16 @@ export const config: WebdriverIO.Config = {
     connectionRetryTimeout: 120000,
     connectionRetryCount: 3,
     
-    services: [],
+    services: [
+        [
+            '@wdio/tauri-service',
+            {
+                appBinaryPath: binaryPath,
+                driverProvider: 'official',
+                tauriDriverPath: path.resolve(os.homedir(), '.cargo', 'bin', 'tauri-driver'),
+            },
+        ],
+    ],
     
     framework: 'mocha',
     reporters: ['spec'],
@@ -81,27 +92,6 @@ export const config: WebdriverIO.Config = {
     // =====
     //
     beforeSession: async () => {
-        console.log('Starting tauri-driver...');
-        const cargoBin = path.join(os.homedir(), '.cargo', 'bin');
-        const env = {
-            ...process.env,
-            PATH: `${process.env.PATH}${path.delimiter}${cargoBin}`,
-            SYSTEM_TRACE_TEST_MODE: '1'
-        };
-        
-        tauriDriver = spawn('tauri-driver', [], {
-            stdio: 'inherit',
-            env
-        });
-        
-        // Give it a moment to start
-        await new Promise(resolve => setTimeout(resolve, 2000));
-    },
-    
-    afterSession: async () => {
-        if (tauriDriver) {
-            console.log('Killing tauri-driver...');
-            tauriDriver.kill();
-        }
+        process.env.SYSTEM_TRACE_TEST_MODE = '1';
     },
 };

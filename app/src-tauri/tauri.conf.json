@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "System Trace",
+  "productName": "system-trace",
   "version": "0.1.0",
   "identifier": "com.systemtrace.app",
   "build": {
@@ -33,7 +33,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["appimage"],
     "category": "Utility",
     "shortDescription": "Privacy-first screen-time tracker.",
     "longDescription": "System Trace is a privacy-first, local-first, cross-platform screen-time tracker. All activity data stays on your computer.",
