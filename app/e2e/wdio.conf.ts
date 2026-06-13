@@ -103,7 +103,7 @@ export const config: WebdriverIO.Config = {
                 try {
                     fs.linkSync(binaryPath, expectedBinaryPath);
                 } catch (e) {
-                    try { fs.symlinkSync(binaryPath, expectedBinaryPath); } catch (e2) {}
+                    try { fs.symlinkSync(binaryPath, expectedBinaryPath); } catch (e2) { /* ignore */ }
                 }
             }
         }
@@ -119,7 +119,7 @@ export const config: WebdriverIO.Config = {
             if (fs.existsSync(expectedBinaryPath)) {
                 try {
                     fs.unlinkSync(expectedBinaryPath);
-                } catch (e) {}
+                } catch (e) { /* ignore */ }
             }
         }
     },
