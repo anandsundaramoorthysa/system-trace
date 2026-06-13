@@ -271,7 +271,7 @@ impl Watcher for MacWatcher {
                 return false;
             }
             let key: id = msg_send![class!(NSString),
-                stringWithUTF8String: b"CGSSessionScreenIsLocked\0".as_ptr() as *const c_char];
+                stringWithUTF8String: c"CGSSessionScreenIsLocked".as_ptr()];
             let val: id = msg_send![dict, objectForKey: key];
             let locked = if val == nil {
                 false

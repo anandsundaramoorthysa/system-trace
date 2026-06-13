@@ -114,7 +114,7 @@ pub fn extract_icon_rgba(path: &str) -> Option<Rgba> {
         // initWithBitmapDataPlanes:pixelsWide:pixelsHigh:bitsPerSample:
         //   samplesPerPixel:hasAlpha:isPlanar:colorSpaceName:bytesPerRow:bitsPerPixel:
         let ns_calibrated: id = msg_send![class!(NSString),
-            stringWithUTF8String: b"NSCalibratedRGBColorSpace\0".as_ptr() as *const _];
+            stringWithUTF8String: c"NSCalibratedRGBColorSpace".as_ptr()];
         let rep: id = msg_send![rep,
             initWithBitmapDataPlanes: std::ptr::null_mut::<*mut u8>()
             pixelsWide: SIZE as i64
