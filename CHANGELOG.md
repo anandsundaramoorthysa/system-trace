@@ -9,6 +9,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 Nothing yet. New work in progress lives here until the next tagged release.
 
+## [0.4.0] - 2026-06-14 - Always-visible status messages
+
+A small follow-up release.
+
+### Fixed
+- Settings status messages (export, backup and restore, and the update
+  check) used to render at the top of the Settings page, so any message
+  triggered while scrolled down appeared off-screen and looked like nothing
+  had happened. They now show as a fixed bottom-center toast that is always
+  visible, and linger a little longer so they are easy to read. This also
+  confirms the "Check for updates" result is shown reliably.
+
 ## [0.3.0] - 2026-06-13 - Productivity tools, personalization, and data safety
 
 A broad quality release: search, real insight tools, personalization, data
