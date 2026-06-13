@@ -33,7 +33,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["appimage"],
+    "targets": "all",
     "category": "Utility",
     "shortDescription": "Privacy-first screen-time tracker.",
     "longDescription": "System Trace is a privacy-first, local-first, cross-platform screen-time tracker. All activity data stays on your computer.",
