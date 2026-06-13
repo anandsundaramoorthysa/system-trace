@@ -37,6 +37,34 @@ pub fn get_day_overview(state: State<AppState>, day: String) -> R<TodayOverview>
     db::day_overview(&conn, &day)
 }
 
+#[tauri::command]
+pub fn get_category_goals(state: State<AppState>) -> R<Vec<CategoryGoal>> {
+    let conn = lock(&state.db)?;
+    db::get_category_goals(&conn)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn set_category_goal(state: State<AppState>, goal: CategoryGoalInput) -> R<()> {
+    let conn = lock(&state.db)?;
+    db::set_category_goal(&conn, &goal)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn remove_category_goal(state: State<AppState>, category_id: i64) -> R<()> {
+    let conn = lock(&state.db)?;
+    db::remove_category_goal(&conn, category_id)
+}
+
+#[tauri::command]
+pub fn get_focus_score(state: State<AppState>) -> R<FocusScore> {
+    let conn = lock(&state.db)?;
+    let day = Utc::now()
+        .with_timezone(&chrono::Local)
+        .format("%Y-%m-%d")
+        .to_string();
+    db::focus_score_for_day(&conn, &day)
+}
+
 /* ----------------------------- apps + categories -------------------------- */
 
 #[tauri::command]

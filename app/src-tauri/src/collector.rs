@@ -169,6 +169,9 @@ mod runtime {
         bedtime_enabled: bool,
         bed_start: i32,
         bed_end: i32,
+        distraction_nudges_enabled: bool,
+        distraction_threshold_ms: i64,
+        bedtime_grayscale_enabled: bool,
     }
 
     fn parse_hhmm(s: &str) -> i32 {
@@ -189,6 +192,9 @@ mod runtime {
                     bedtime_enabled: s.bedtime_enabled,
                     bed_start: parse_hhmm(&s.bedtime_start),
                     bed_end: parse_hhmm(&s.bedtime_end),
+                    distraction_nudges_enabled: s.distraction_nudges_enabled,
+                    distraction_threshold_ms: (s.distraction_threshold_mins as i64) * 60_000,
+                    bedtime_grayscale_enabled: s.bedtime_grayscale_enabled,
                 };
             }
         }
@@ -200,7 +206,26 @@ mod runtime {
             bedtime_enabled: false,
             bed_start: 22 * 60,
             bed_end: 7 * 60,
+            distraction_nudges_enabled: false,
+            distraction_threshold_ms: 20 * 60_000,
+            bedtime_grayscale_enabled: false,
         }
+    }
+
+    /// Look up whether an app's category is marked distracting (productive = 0).
+    /// Returns false on any DB error - distraction nudges are best-effort.
+    fn app_is_distracting(db: &Arc<Mutex<rusqlite::Connection>>, app_key: &str) -> bool {
+        if let Ok(c) = db.lock() {
+            let res: rusqlite::Result<Option<i64>> = c.query_row(
+                "SELECT c.productive FROM app a
+                 LEFT JOIN category c ON c.id = a.category_id
+                 WHERE a.app_key = ?1",
+                rusqlite::params![app_key],
+                |r| r.get(0),
+            );
+            return matches!(res, Ok(Some(0)));
+        }
+        false
     }
 
     /// Is the local wall-clock currently inside the (possibly overnight) window?
@@ -346,6 +371,15 @@ mod runtime {
                 let mut well = load_wellbeing(&db);
                 let mut active_run_ms: i64 = 0;
                 let mut last_tick = now_ms();
+                // Distraction-nudge state: how long the current distracting app
+                // has been in front, and the last app_key we nudged on (so we
+                // don't spam the same one repeatedly).
+                let mut distract_run_ms: i64 = 0;
+                let mut distract_last_app: Option<String> = None;
+                let mut distract_fired_app: Option<String> = None;
+                // Grayscale state: track whether we last applied it so we only
+                // toggle on transitions, not every loop iteration.
+                let mut grayscale_active: bool = false;
                 // Catch up on any summary missed while the app was closed.
                 check_summaries(&app, &db);
 
@@ -422,6 +456,15 @@ mod runtime {
                     // ---- Phase 3 wellbeing: break reminders + bedtime quiet hours ----
                     let in_bed =
                         well.bedtime_enabled && in_bedtime_now(well.bed_start, well.bed_end, now);
+
+                    // Apply OS grayscale on transition into / out of bedtime,
+                    // but only when the user opted in. Best-effort: an error
+                    // here should not break the rest of the loop.
+                    let want_grayscale = in_bed && well.bedtime_grayscale_enabled;
+                    if want_grayscale != grayscale_active {
+                        let _ = crate::grayscale::set_grayscale(want_grayscale);
+                        grayscale_active = want_grayscale;
+                    }
                     if matches!(new_state, CollectorState::Active) {
                         active_run_ms += delta;
                     } else {
@@ -448,6 +491,55 @@ mod runtime {
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
+                    }
+
+                    // ---- Distraction nudge: continuous time on a distracting app ----
+                    if well.distraction_nudges_enabled
+                        && !in_bed
+                        && matches!(new_state, CollectorState::Active)
+                    {
+                        let cur = cur_key.as_deref();
+                        if cur != distract_last_app.as_deref() {
+                            distract_run_ms = 0;
+                            distract_last_app = cur.map(|s| s.to_string());
+                            distract_fired_app = None;
+                        }
+                        if let Some(key) = cur {
+                            if app_is_distracting(&db, key) {
+                                distract_run_ms += delta;
+                                if distract_run_ms >= well.distraction_threshold_ms
+                                    && distract_fired_app.as_deref() != Some(key)
+                                {
+                                    distract_fired_app = Some(key.to_string());
+                                    let display = cur_name.as_deref().unwrap_or(key);
+                                    let mins = (distract_run_ms / 60_000).max(1);
+                                    let _ = app.emit(
+                                        event::DISTRACTION_NUDGE,
+                                        serde_json::json!({
+                                            "app_key": key,
+                                            "app_name": display,
+                                            "mins": mins,
+                                        }),
+                                    );
+                                    let _ = app
+                                        .notification()
+                                        .builder()
+                                        .title("Distraction nudge")
+                                        .body(format!(
+                                            "{} mins on {}. Worth a quick break?",
+                                            mins, display
+                                        ))
+                                        .show();
+                                }
+                            } else {
+                                distract_run_ms = 0;
+                                distract_fired_app = None;
+                            }
+                        }
+                    } else {
+                        distract_run_ms = 0;
+                        distract_last_app = None;
+                        distract_fired_app = None;
                     }
 
                     // Throttled live update for the UI hero number.

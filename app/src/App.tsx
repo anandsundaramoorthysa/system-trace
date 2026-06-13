@@ -7,10 +7,12 @@ import { Reports } from "./pages/Reports";
 import { Focus } from "./pages/Focus";
 import { Wellbeing } from "./pages/Wellbeing";
 import { Settings } from "./pages/Settings";
+import { Onboarding } from "./pages/Onboarding";
 import { BreakOverlay } from "./components/BreakOverlay";
+import { DistractionToast } from "./components/DistractionToast";
 import type { Page } from "./lib/nav";
 import type { CollectorState } from "./lib/types";
-import { getCollectorState, onUsageTick, setTrackingPaused } from "./lib/api";
+import { getCollectorState, getSettings, onUsageTick, setTrackingPaused } from "./lib/api";
 
 const TITLES: Record<Page, string> = {
   dashboard: "Dashboard",
@@ -26,6 +28,16 @@ export default function App() {
   const [state, setState] = useState<CollectorState>("idle");
   const [activeApp, setActiveApp] = useState<string | null>(null);
   const [liveTotal, setLiveTotal] = useState<number | null>(null);
+  // `null` while loading; `true` once we know the user has finished onboarding.
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    getSettings()
+      .then((s) => setOnboarded(s.onboarding_complete))
+      // If the settings load fails for some reason, don't trap the user on the
+      // welcome screen forever - assume they've been here before.
+      .catch(() => setOnboarded(true));
+  }, []);
 
   useEffect(() => {
     getCollectorState().then(setState).catch(() => {});
@@ -51,6 +63,15 @@ export default function App() {
     if (next === "paused") setActiveApp(null);
   }
 
+  if (onboarded === null) {
+    // Quiet first-paint while we resolve the onboarding flag - avoids a flash
+    // of the dashboard before the welcome screen.
+    return <div className="h-screen bg-bg" />;
+  }
+  if (!onboarded) {
+    return <Onboarding onDone={() => setOnboarded(true)} />;
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-bg text-text">
       <Sidebar active={page} onNavigate={setPage} />
@@ -72,6 +93,7 @@ export default function App() {
         </main>
       </div>
       <BreakOverlay />
+      <DistractionToast />
     </div>
   );
 }

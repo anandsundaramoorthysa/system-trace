@@ -13,12 +13,16 @@ import {
   type BlockRule,
   type BlockRuleInput,
   type BreakDue,
+  type DistractionNudge,
   type Category,
+  type CategoryGoal,
+  type CategoryGoalInput,
   type CategoryInput,
   type CollectorState,
   type Exclusion,
   type ExportFormat,
   type ExportResult,
+  type FocusScore,
   type FocusState,
   type ImportResult,
   type LimitInput,
@@ -62,6 +66,33 @@ export function getRangeOverview(from: string, to: string): Promise<RangeOvervie
 export function getDayOverview(day: string): Promise<TodayOverview> {
   if (!isTauri) return Promise.resolve(mockToday());
   return invoke(COMMAND.GET_DAY_OVERVIEW, { day });
+}
+
+export function getCategoryGoals(): Promise<CategoryGoal[]> {
+  if (!isTauri) return Promise.resolve([]);
+  return invoke(COMMAND.GET_CATEGORY_GOALS);
+}
+
+export function setCategoryGoal(goal: CategoryGoalInput): Promise<void> {
+  if (!isTauri) return Promise.resolve();
+  return invoke(COMMAND.SET_CATEGORY_GOAL, { goal });
+}
+
+export function removeCategoryGoal(category_id: number): Promise<void> {
+  if (!isTauri) return Promise.resolve();
+  return invoke(COMMAND.REMOVE_CATEGORY_GOAL, { category_id });
+}
+
+export function getFocusScore(): Promise<FocusScore> {
+  if (!isTauri)
+    return Promise.resolve({
+      day: new Date().toISOString().slice(0, 10),
+      score: 72,
+      productive_ms: 90 * 60_000,
+      distracting_ms: 35 * 60_000,
+      neutral_ms: 20 * 60_000,
+    });
+  return invoke(COMMAND.GET_FOCUS_SCORE);
 }
 
 /* --------------------------- apps + categories ---------------------------- */
@@ -245,4 +276,12 @@ export async function onUsageTick(
 export async function onBreakDue(cb: (b: BreakDue) => void): Promise<UnlistenFn> {
   if (!isTauri) return () => {};
   return listen<BreakDue>(EVENT.BREAK_DUE, (e) => cb(e.payload));
+}
+
+/** Subscribe to `distraction_nudge`. Returns an unlisten function. */
+export async function onDistractionNudge(
+  cb: (n: DistractionNudge) => void,
+): Promise<UnlistenFn> {
+  if (!isTauri) return () => {};
+  return listen<DistractionNudge>(EVENT.DISTRACTION_NUDGE, (e) => cb(e.payload));
 }

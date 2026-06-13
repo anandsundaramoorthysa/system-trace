@@ -81,14 +81,38 @@ pub fn migrate(conn: &Connection) -> DbResult<()> {
             strictness TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS block_rule (
-            id      INTEGER PRIMARY KEY,
-            kind    TEXT NOT NULL,
-            pattern TEXT NOT NULL,
-            enabled INTEGER NOT NULL DEFAULT 1
+            id               INTEGER PRIMARY KEY,
+            kind             TEXT NOT NULL,
+            pattern          TEXT NOT NULL,
+            enabled          INTEGER NOT NULL DEFAULT 1,
+            schedule_enabled INTEGER NOT NULL DEFAULT 0,
+            schedule_start   INTEGER,
+            schedule_end     INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS category_goal (
+            category_id    INTEGER PRIMARY KEY REFERENCES category(id) ON DELETE CASCADE,
+            daily_ms       INTEGER NOT NULL,
+            kind           TEXT NOT NULL CHECK (kind IN ('under','over'))
         );
         "#,
     )
     .map_err(map_err)?;
+
+    // Additive migrations for upgraded installs. SQLite returns
+    // "duplicate column" when the column already exists - ignore that case so
+    // running migrate() on a fresh DB and an old DB both succeed.
+    for stmt in [
+        "ALTER TABLE block_rule ADD COLUMN schedule_enabled INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE block_rule ADD COLUMN schedule_start INTEGER",
+        "ALTER TABLE block_rule ADD COLUMN schedule_end INTEGER",
+    ] {
+        if let Err(e) = conn.execute(stmt, []) {
+            let msg = e.to_string();
+            if !msg.contains("duplicate column") && !msg.contains("already exists") {
+                return Err(map_err(e));
+            }
+        }
+    }
 
     // Seed default neutral categories once.
     let count: i64 = conn
@@ -308,6 +332,115 @@ fn category_usage_for_days(
         })
         .map_err(map_err)?;
     rows.collect::<Result<Vec<_>, _>>().map_err(map_err)
+}
+
+/* -------------------------------- goals ----------------------------------- */
+
+pub fn get_category_goals(conn: &Connection) -> DbResult<Vec<CategoryGoal>> {
+    let day = today_key();
+    let mut stmt = conn
+        .prepare(
+            "SELECT g.category_id, c.name, c.color, g.daily_ms, g.kind,
+                    COALESCE(SUM(d.total_ms), 0) AS today_ms
+             FROM category_goal g
+             JOIN category c ON c.id = g.category_id
+             LEFT JOIN app a ON a.category_id = g.category_id
+             LEFT JOIN daily_app_usage d ON d.app_id = a.id AND d.day = ?1
+             GROUP BY g.category_id
+             ORDER BY c.name COLLATE NOCASE",
+        )
+        .map_err(map_err)?;
+    let rows = stmt
+        .query_map(params![day], |r| {
+            let kind_str: String = r.get(4)?;
+            let kind = match kind_str.as_str() {
+                "over" => GoalKind::Over,
+                _ => GoalKind::Under,
+            };
+            Ok(CategoryGoal {
+                category_id: r.get(0)?,
+                category_name: r.get(1)?,
+                color: r.get(2)?,
+                daily_ms: r.get(3)?,
+                kind,
+                today_ms: r.get(5)?,
+            })
+        })
+        .map_err(map_err)?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(map_err)
+}
+
+pub fn set_category_goal(conn: &Connection, input: &CategoryGoalInput) -> DbResult<()> {
+    let kind = match input.kind {
+        GoalKind::Under => "under",
+        GoalKind::Over => "over",
+    };
+    conn.execute(
+        "INSERT INTO category_goal (category_id, daily_ms, kind)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(category_id) DO UPDATE SET daily_ms = excluded.daily_ms, kind = excluded.kind",
+        params![input.category_id, input.daily_ms, kind],
+    )
+    .map_err(map_err)?;
+    Ok(())
+}
+
+pub fn remove_category_goal(conn: &Connection, category_id: i64) -> DbResult<()> {
+    conn.execute(
+        "DELETE FROM category_goal WHERE category_id = ?1",
+        params![category_id],
+    )
+    .map_err(map_err)?;
+    Ok(())
+}
+
+/// Roll up today's usage into productive / distracting / neutral buckets based
+/// on the category's `productive` flag. Score is 0..=100, defined as
+/// productive_ms / (productive_ms + distracting_ms); neutral time does not
+/// help or hurt the score. Returns score=0 when nothing scored has been used.
+pub fn focus_score_for_day(conn: &Connection, day: &str) -> DbResult<FocusScore> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT c.productive, SUM(d.total_ms)
+             FROM daily_app_usage d
+             JOIN app a ON a.id = d.app_id
+             LEFT JOIN category c ON c.id = a.category_id
+             WHERE d.day = ?1
+             GROUP BY c.productive",
+        )
+        .map_err(map_err)?;
+    let rows = stmt
+        .query_map(params![day], |r| {
+            Ok((r.get::<_, Option<bool>>(0)?, r.get::<_, i64>(1)?))
+        })
+        .map_err(map_err)?;
+
+    let mut productive_ms = 0i64;
+    let mut distracting_ms = 0i64;
+    let mut neutral_ms = 0i64;
+    for row in rows {
+        let (flag, total) = row.map_err(map_err)?;
+        match flag {
+            Some(true) => productive_ms += total,
+            Some(false) => distracting_ms += total,
+            None => neutral_ms += total,
+        }
+    }
+
+    let scored = productive_ms + distracting_ms;
+    let score = if scored > 0 {
+        ((productive_ms as f64 / scored as f64) * 100.0).round() as u8
+    } else {
+        0
+    };
+
+    Ok(FocusScore {
+        day: day.to_string(),
+        score,
+        productive_ms,
+        distracting_ms,
+        neutral_ms,
+    })
 }
 
 fn total_for_days(conn: &Connection, from: &str, to: &str) -> DbResult<i64> {
@@ -637,6 +770,15 @@ pub fn get_settings(conn: &Connection) -> DbResult<Settings> {
         onboarding_complete: get("onboarding_complete")?
             .map(|v| parse_bool(&v))
             .unwrap_or(false),
+        distraction_nudges_enabled: get("distraction_nudges_enabled")?
+            .map(|v| parse_bool(&v))
+            .unwrap_or(false),
+        distraction_threshold_mins: get("distraction_threshold_mins")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(20),
+        bedtime_grayscale_enabled: get("bedtime_grayscale_enabled")?
+            .map(|v| parse_bool(&v))
+            .unwrap_or(false),
     })
 }
 
@@ -893,17 +1035,24 @@ fn kind_str(k: BlockKind) -> &'static str {
 
 pub fn get_block_rules(conn: &Connection) -> DbResult<Vec<BlockRule>> {
     let mut stmt = conn
-        .prepare("SELECT id, kind, pattern, enabled FROM block_rule ORDER BY id")
+        .prepare(
+            "SELECT id, kind, pattern, enabled, schedule_enabled, schedule_start, schedule_end
+             FROM block_rule ORDER BY id",
+        )
         .map_err(map_err)?;
     let rows = stmt
         .query_map([], |r| {
             let kind: String = r.get(1)?;
             let enabled: i64 = r.get(3)?;
+            let sched_enabled: i64 = r.get(4)?;
             Ok(BlockRule {
                 id: r.get(0)?,
                 kind: parse_kind(&kind),
                 pattern: r.get(2)?,
                 enabled: enabled != 0,
+                schedule_enabled: sched_enabled != 0,
+                schedule_start: r.get(5)?,
+                schedule_end: r.get(6)?,
             })
         })
         .map_err(map_err)?;
@@ -914,11 +1063,15 @@ pub fn set_block_rule(conn: &Connection, input: &BlockRuleInput) -> DbResult<Blo
     let id = match input.id {
         Some(id) => {
             conn.execute(
-                "UPDATE block_rule SET kind = ?1, pattern = ?2, enabled = ?3 WHERE id = ?4",
+                "UPDATE block_rule SET kind = ?1, pattern = ?2, enabled = ?3,
+                 schedule_enabled = ?4, schedule_start = ?5, schedule_end = ?6 WHERE id = ?7",
                 params![
                     kind_str(input.kind),
                     input.pattern,
                     input.enabled as i64,
+                    input.schedule_enabled as i64,
+                    input.schedule_start,
+                    input.schedule_end,
                     id
                 ],
             )
@@ -927,8 +1080,16 @@ pub fn set_block_rule(conn: &Connection, input: &BlockRuleInput) -> DbResult<Blo
         }
         None => {
             conn.execute(
-                "INSERT INTO block_rule (kind, pattern, enabled) VALUES (?1, ?2, ?3)",
-                params![kind_str(input.kind), input.pattern, input.enabled as i64],
+                "INSERT INTO block_rule (kind, pattern, enabled, schedule_enabled,
+                 schedule_start, schedule_end) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    kind_str(input.kind),
+                    input.pattern,
+                    input.enabled as i64,
+                    input.schedule_enabled as i64,
+                    input.schedule_start,
+                    input.schedule_end,
+                ],
             )
             .map_err(map_err)?;
             conn.last_insert_rowid()
@@ -939,7 +1100,32 @@ pub fn set_block_rule(conn: &Connection, input: &BlockRuleInput) -> DbResult<Blo
         kind: input.kind,
         pattern: input.pattern.clone(),
         enabled: input.enabled,
+        schedule_enabled: input.schedule_enabled,
+        schedule_start: input.schedule_start,
+        schedule_end: input.schedule_end,
     })
+}
+
+/// True when a rule is in force right now. Rules with no schedule are always
+/// in force when enabled; scheduled rules only fire inside their window.
+pub fn rule_in_force_at(rule: &BlockRule, mins_now: i32) -> bool {
+    if !rule.enabled {
+        return false;
+    }
+    if !rule.schedule_enabled {
+        return true;
+    }
+    match (rule.schedule_start, rule.schedule_end) {
+        (Some(s), Some(e)) if s != e => {
+            if s < e {
+                mins_now >= s && mins_now < e
+            } else {
+                // Overnight window (e.g. 22:00 - 07:00).
+                mins_now >= s || mins_now < e
+            }
+        }
+        _ => true,
+    }
 }
 
 pub fn remove_block_rule(conn: &Connection, id: i64) -> DbResult<()> {
@@ -957,26 +1143,33 @@ pub fn enabled_block_rules_count(conn: &Connection) -> DbResult<i64> {
     .map_err(map_err)
 }
 
-/// Enabled app-kind block patterns, for the collector's in-process focus nudge.
-pub fn enabled_app_block_patterns(conn: &Connection) -> DbResult<Vec<String>> {
-    let mut stmt = conn
-        .prepare("SELECT pattern FROM block_rule WHERE enabled = 1 AND kind = 'app'")
-        .map_err(map_err)?;
-    let rows = stmt
-        .query_map([], |r| r.get::<_, String>(0))
-        .map_err(map_err)?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(map_err)
+/// Local-time minutes since midnight, used by `rule_in_force_at`.
+fn mins_since_midnight_now() -> i32 {
+    use chrono::Timelike;
+    let d = chrono::Local::now();
+    (d.hour() * 60 + d.minute()) as i32
 }
 
-/// Enabled website-kind block patterns, for the hosts-file blocker.
+/// Enabled app-kind block patterns currently in force (respects schedules).
+pub fn enabled_app_block_patterns(conn: &Connection) -> DbResult<Vec<String>> {
+    let mins = mins_since_midnight_now();
+    let rules = get_block_rules(conn)?;
+    Ok(rules
+        .into_iter()
+        .filter(|r| matches!(r.kind, BlockKind::App) && rule_in_force_at(r, mins))
+        .map(|r| r.pattern)
+        .collect())
+}
+
+/// Enabled website-kind block patterns currently in force (respects schedules).
 pub fn enabled_website_block_patterns(conn: &Connection) -> DbResult<Vec<String>> {
-    let mut stmt = conn
-        .prepare("SELECT pattern FROM block_rule WHERE enabled = 1 AND kind = 'website'")
-        .map_err(map_err)?;
-    let rows = stmt
-        .query_map([], |r| r.get::<_, String>(0))
-        .map_err(map_err)?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(map_err)
+    let mins = mins_since_midnight_now();
+    let rules = get_block_rules(conn)?;
+    Ok(rules
+        .into_iter()
+        .filter(|r| matches!(r.kind, BlockKind::Website) && rule_in_force_at(r, mins))
+        .map(|r| r.pattern)
+        .collect())
 }
 
 /* ---------------------------------- tests --------------------------------- */

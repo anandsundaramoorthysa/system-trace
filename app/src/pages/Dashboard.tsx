@@ -1,5 +1,5 @@
-import { Clock, AppWindow, Timer, Repeat } from "lucide-react";
-import { getTodayOverview } from "../lib/api";
+import { Clock, AppWindow, Timer, Repeat, Gauge } from "lucide-react";
+import { getFocusScore, getSettings, getTodayOverview } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { formatDelta, formatDuration } from "../lib/format";
 import { Card, CardTitle, Spinner } from "../components/ui";
@@ -10,6 +10,12 @@ import { TopApps } from "../components/TopApps";
 
 export function Dashboard({ liveTotalMs }: { liveTotalMs: number | null }) {
   const { data, loading, error } = useAsync(getTodayOverview, []);
+  const { data: settings } = useAsync(getSettings, []);
+  const scoringOn = settings?.scoring_enabled ?? false;
+  const { data: focusScore } = useAsync(
+    () => (scoringOn ? getFocusScore() : Promise.resolve(null)),
+    [scoringOn],
+  );
 
   if (loading && !data) return <Spinner label="Loading today" />;
   if (error && !data)
@@ -45,6 +51,18 @@ export function Dashboard({ liveTotalMs }: { liveTotalMs: number | null }) {
           value={formatDuration(data.longest_session_ms)}
           hint={data.longest_session_app ?? "No usage yet"}
         />
+        {scoringOn && focusScore ? (
+          <StatCard
+            icon={<Gauge className="h-4 w-4" />}
+            label="Focus Score"
+            value={`${focusScore.score}`}
+            hint={
+              focusScore.productive_ms + focusScore.distracting_ms === 0
+                ? "Categorize apps to score"
+                : `${formatDuration(focusScore.productive_ms)} productive / ${formatDuration(focusScore.distracting_ms)} distracting`
+            }
+          />
+        ) : null}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

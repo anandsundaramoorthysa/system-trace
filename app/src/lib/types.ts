@@ -144,6 +144,35 @@ export interface DayTotal {
  * Aggregates for an arbitrary inclusive date range (used for Week and Month).
  * `from`/`to` echo the requested local-day bounds.
  */
+/** Direction of a category goal. */
+export type GoalKind = "under" | "over";
+
+/** A daily target for one category, joined with today's usage for display. */
+export interface CategoryGoal {
+  category_id: Id;
+  category_name: string;
+  color: string | null;
+  daily_ms: Millis;
+  kind: GoalKind;
+  today_ms: Millis;
+}
+
+/** Input for `set_category_goal`. */
+export interface CategoryGoalInput {
+  category_id: Id;
+  daily_ms: Millis;
+  kind: GoalKind;
+}
+
+/** A productivity Focus Score for a single day. 0..=100. Only surfaced when settings.scoring_enabled. */
+export interface FocusScore {
+  day: DayKey;
+  score: number;
+  productive_ms: Millis;
+  distracting_ms: Millis;
+  neutral_ms: Millis;
+}
+
 export interface RangeOverview {
   from: DayKey;
   to: DayKey;
@@ -215,6 +244,12 @@ export interface Settings {
   bedtime_end: string;
   /** True until onboarding completes; gates the first-run flow. */
   onboarding_complete: boolean;
+  /** Phase 3+: emit a calm nudge after N minutes of continuous distracting use. */
+  distraction_nudges_enabled: boolean;
+  /** How many minutes on a distracting category before the nudge fires. */
+  distraction_threshold_mins: number;
+  /** Phase 3+: apply a best-effort OS grayscale during quiet hours. */
+  bedtime_grayscale_enabled: boolean;
 }
 
 /** The string keys accepted by `set_setting`. Keep in sync with `Settings`. */
@@ -235,12 +270,22 @@ export type SettingKey =
   | "bedtime_enabled"
   | "bedtime_start"
   | "bedtime_end"
-  | "onboarding_complete";
+  | "onboarding_complete"
+  | "distraction_nudges_enabled"
+  | "distraction_threshold_mins"
+  | "bedtime_grayscale_enabled";
 
 /** Payload of the `break_due` event. */
 export interface BreakDue {
   duration_secs: number;
   strict: boolean;
+}
+
+/** Payload of `distraction_nudge`. */
+export interface DistractionNudge {
+  app_key: string;
+  app_name: string;
+  mins: number;
 }
 
 /* ------------------------------------------------------------------ *
@@ -321,6 +366,10 @@ export interface BlockRule {
   kind: BlockKind;
   pattern: string;
   enabled: boolean;
+  /** When true, the rule only applies inside [schedule_start, schedule_end) (mins since midnight). */
+  schedule_enabled: boolean;
+  schedule_start: number | null;
+  schedule_end: number | null;
 }
 
 /** Argument for `set_block_rule` (id null = insert). */
@@ -329,6 +378,9 @@ export interface BlockRuleInput {
   kind: BlockKind;
   pattern: string;
   enabled: boolean;
+  schedule_enabled: boolean;
+  schedule_start: number | null;
+  schedule_end: number | null;
 }
 
 /** Live focus-mode state. */
@@ -352,6 +404,8 @@ export const EVENT = {
   FOCUS_BLOCKED: "focus_blocked",
   /** Phase 3: a wellbeing break is due. */
   BREAK_DUE: "break_due",
+  /** Phase 3: gentle nudge after sustained use of a distracting category. */
+  DISTRACTION_NUDGE: "distraction_nudge",
   /** Phase 3: a focus session ended. */
   FOCUS_ENDED: "focus_ended",
 } as const;
@@ -401,6 +455,10 @@ export const COMMAND = {
   GET_TODAY_OVERVIEW: "get_today_overview",
   GET_RANGE_OVERVIEW: "get_range_overview",
   GET_DAY_OVERVIEW: "get_day_overview",
+  GET_FOCUS_SCORE: "get_focus_score",
+  GET_CATEGORY_GOALS: "get_category_goals",
+  SET_CATEGORY_GOAL: "set_category_goal",
+  REMOVE_CATEGORY_GOAL: "remove_category_goal",
   // Apps / Categories
   GET_APPS: "get_apps",
   SET_APP_CATEGORY: "set_app_category",
@@ -465,6 +523,22 @@ export interface CommandMap {
   [COMMAND.GET_DAY_OVERVIEW]: {
     args: { day: DayKey };
     result: TodayOverview;
+  };
+  [COMMAND.GET_FOCUS_SCORE]: {
+    args: Record<string, never>;
+    result: FocusScore;
+  };
+  [COMMAND.GET_CATEGORY_GOALS]: {
+    args: Record<string, never>;
+    result: CategoryGoal[];
+  };
+  [COMMAND.SET_CATEGORY_GOAL]: {
+    args: { goal: CategoryGoalInput };
+    result: void;
+  };
+  [COMMAND.REMOVE_CATEGORY_GOAL]: {
+    args: { category_id: Id };
+    result: void;
   };
   [COMMAND.GET_APPS]: {
     args: Record<string, never>;

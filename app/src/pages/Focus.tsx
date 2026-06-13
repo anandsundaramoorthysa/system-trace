@@ -37,6 +37,21 @@ import { formatDuration } from "../lib/format";
 
 const SESSION_OPTIONS = [25, 50, 90];
 
+/** "9:00" -> 540, defaulting to 0 on parse failure. */
+function hhmmToMins(s: string): number {
+  const [h, m] = s.split(":");
+  return (Number(h) || 0) * 60 + (Number(m) || 0);
+}
+/** 540 -> "09:00". Accepts null for the empty case. */
+function minsToHHMM(m: number | null | undefined): string {
+  if (m == null) return "00:00";
+  const h = Math.floor(m / 60)
+    .toString()
+    .padStart(2, "0");
+  const min = (m % 60).toString().padStart(2, "0");
+  return `${h}:${min}`;
+}
+
 function LimitBar({ limit }: { limit: LimitView }) {
   const ratio = limit.daily_ms > 0 ? limit.used_ms / limit.daily_ms : 0;
   const color = limit.exceeded ? "bg-negative" : ratio > 0.8 ? "bg-warning" : "bg-accent";
@@ -52,6 +67,7 @@ export function Focus() {
   const [limits, setLimits] = useState<LimitView[]>([]);
   const [apps, setApps] = useState<AppInfo[]>([]);
   const [rules, setRules] = useState<BlockRule[]>([]);
+  const [now, setNow] = useState(() => Date.now());
 
   const [sessionMins, setSessionMins] = useState(25);
   const [limApp, setLimApp] = useState<string>("");
@@ -67,6 +83,23 @@ export function Focus() {
     getApps().then(setApps).catch(() => {});
     getBlockRules().then(setRules).catch(() => {});
   }, []);
+
+  // Tick the countdown every second while a focus session is running so the
+  // user sees real time remaining, not just the value at session start.
+  useEffect(() => {
+    if (!focus?.active || !focus.ends_at_ms) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [focus?.active, focus?.ends_at_ms]);
+
+  // When the timer reaches zero, refresh the focus state in case the backend
+  // has already ended the session (the focus_ended event also triggers this).
+  useEffect(() => {
+    if (!focus?.active || !focus.ends_at_ms) return;
+    if (now >= focus.ends_at_ms) {
+      getFocusState().then(setFocus).catch(() => {});
+    }
+  }, [now, focus?.active, focus?.ends_at_ms]);
 
   async function startSession() {
     setFocus(await startFocusSession(sessionMins));
@@ -89,15 +122,35 @@ export function Focus() {
   async function addRule() {
     const p = rulePattern.trim();
     if (!p) return;
-    await setBlockRule({ id: null, kind: ruleKind, pattern: p, enabled: true });
+    await setBlockRule({
+      id: null,
+      kind: ruleKind,
+      pattern: p,
+      enabled: true,
+      schedule_enabled: false,
+      schedule_start: null,
+      schedule_end: null,
+    });
     setRules(await getBlockRules());
     setRulePattern("");
     setFocus(await getFocusState());
   }
-  async function toggleRule(rule: BlockRule, enabled: boolean) {
-    await setBlockRule({ id: rule.id, kind: rule.kind, pattern: rule.pattern, enabled });
-    setRules((rs) => rs.map((r) => (r.id === rule.id ? { ...r, enabled } : r)));
+  async function updateRule(rule: BlockRule, patch: Partial<BlockRule>) {
+    const next: BlockRule = { ...rule, ...patch };
+    await setBlockRule({
+      id: next.id,
+      kind: next.kind,
+      pattern: next.pattern,
+      enabled: next.enabled,
+      schedule_enabled: next.schedule_enabled,
+      schedule_start: next.schedule_start,
+      schedule_end: next.schedule_end,
+    });
+    setRules((rs) => rs.map((r) => (r.id === rule.id ? next : r)));
     setFocus(await getFocusState());
+  }
+  async function toggleRule(rule: BlockRule, enabled: boolean) {
+    await updateRule(rule, { enabled });
   }
   async function dropRule(id: number) {
     await removeBlockRule(id);
@@ -124,9 +177,15 @@ export function Focus() {
 
   const limitedIds = new Set(limits.map((l) => l.app_id));
   const available = apps.filter((a) => !limitedIds.has(a.id));
-  const remainingMins =
-    focus?.active && focus.ends_at_ms
-      ? Math.max(0, Math.round((focus.ends_at_ms - Date.now()) / 60000))
+  const remainingMs =
+    focus?.active && focus.ends_at_ms ? Math.max(0, focus.ends_at_ms - now) : null;
+  const countdown =
+    remainingMs !== null
+      ? `${Math.floor(remainingMs / 60000)
+          .toString()
+          .padStart(2, "0")}:${Math.floor((remainingMs % 60000) / 1000)
+          .toString()
+          .padStart(2, "0")}`
       : null;
 
   return (
@@ -148,22 +207,30 @@ export function Focus() {
               <CardTitle>Focus mode</CardTitle>
               <p className="text-body text-text-muted">
                 {focus?.active
-                  ? remainingMins !== null
-                    ? `On - about ${remainingMins} min left. Blocked apps will nudge you.`
-                    : "On. Blocked apps will nudge you."
+                  ? "Blocked apps will nudge you."
                   : `Off. ${focus?.rules_count ?? 0} block rule(s) ready.`}
               </p>
             </div>
           </div>
 
           {focus?.active ? (
-            <button
-              type="button"
-              onClick={stopSession}
-              className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-body-strong text-text hover:bg-surface-2"
-            >
-              <Square className="h-4 w-4" aria-hidden /> Stop
-            </button>
+            <div className="flex items-center gap-3">
+              {countdown !== null ? (
+                <span
+                  className="rounded-md border border-border bg-bg px-3 py-1.5 font-mono text-stat tabular-nums text-text"
+                  aria-label="Time remaining in focus session"
+                >
+                  {countdown}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={stopSession}
+                className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-body-strong text-text hover:bg-surface-2"
+              >
+                <Square className="h-4 w-4" aria-hidden /> Stop
+              </button>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <div className="inline-flex rounded-md border border-border bg-bg p-0.5">
@@ -316,25 +383,67 @@ export function Focus() {
               {rules.map((r) => (
                 <li
                   key={r.id}
-                  className="flex items-center justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2 text-body"
+                  className="rounded-md border border-border bg-bg px-3 py-2 text-body"
                 >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="rounded bg-surface px-1.5 py-0.5 text-label text-text-muted">
-                      {r.kind}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="rounded bg-surface px-1.5 py-0.5 text-label text-text-muted">
+                        {r.kind}
+                      </span>
+                      <span className="truncate text-text">{r.pattern}</span>
+                      {r.schedule_enabled ? (
+                        <span className="rounded bg-accent/15 px-1.5 py-0.5 text-label text-accent">
+                          {minsToHHMM(r.schedule_start)}-{minsToHHMM(r.schedule_end)}
+                        </span>
+                      ) : null}
                     </span>
-                    <span className="truncate text-text">{r.pattern}</span>
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <Toggle checked={r.enabled} onChange={(v) => toggleRule(r, v)} />
-                    <button
-                      type="button"
-                      onClick={() => dropRule(r.id)}
-                      className="text-text-muted hover:text-negative"
-                      aria-label={`Remove rule ${r.pattern}`}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </button>
-                  </span>
+                    <span className="flex items-center gap-3">
+                      <Toggle checked={r.enabled} onChange={(v) => toggleRule(r, v)} />
+                      <button
+                        type="button"
+                        onClick={() => dropRule(r.id)}
+                        className="text-text-muted hover:text-negative"
+                        aria-label={`Remove rule ${r.pattern}`}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </button>
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-label text-text-muted">
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={r.schedule_enabled}
+                        onChange={(e) =>
+                          updateRule(r, {
+                            schedule_enabled: e.target.checked,
+                            schedule_start: r.schedule_start ?? 9 * 60,
+                            schedule_end: r.schedule_end ?? 17 * 60,
+                          })
+                        }
+                      />
+                      Active only between
+                    </label>
+                    <input
+                      type="time"
+                      disabled={!r.schedule_enabled}
+                      value={minsToHHMM(r.schedule_start ?? 9 * 60)}
+                      onChange={(e) =>
+                        updateRule(r, { schedule_start: hhmmToMins(e.target.value) })
+                      }
+                      className="rounded-md border border-border bg-bg px-2 py-1 text-body text-text disabled:opacity-50"
+                    />
+                    <span>and</span>
+                    <input
+                      type="time"
+                      disabled={!r.schedule_enabled}
+                      value={minsToHHMM(r.schedule_end ?? 17 * 60)}
+                      onChange={(e) =>
+                        updateRule(r, { schedule_end: hhmmToMins(e.target.value) })
+                      }
+                      className="rounded-md border border-border bg-bg px-2 py-1 text-body text-text disabled:opacity-50"
+                    />
+                  </div>
                 </li>
               ))}
             </ul>

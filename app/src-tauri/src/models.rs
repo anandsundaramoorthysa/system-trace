@@ -117,6 +117,49 @@ pub struct TodayOverview {
     pub active_app: Option<String>,
 }
 
+/// Direction of a category goal.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum GoalKind {
+    /// Stay under this amount (e.g. social <= 1h).
+    Under,
+    /// Reach at least this amount (e.g. reading >= 30m).
+    Over,
+}
+
+/// A daily target for one category.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CategoryGoal {
+    pub category_id: i64,
+    pub category_name: String,
+    pub color: Option<String>,
+    pub daily_ms: i64,
+    pub kind: GoalKind,
+    /// Today's actual category usage so the UI can show progress.
+    pub today_ms: i64,
+}
+
+/// Argument shape for `set_category_goal`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CategoryGoalInput {
+    pub category_id: i64,
+    pub daily_ms: i64,
+    pub kind: GoalKind,
+}
+
+/// A productivity Focus Score for a single day. The score is 0..=100,
+/// computed from productive_ms / (productive_ms + distracting_ms). Neutral
+/// time (uncategorized or category.productive == None) does not affect the
+/// ratio. Only surfaced in the UI when `settings.scoring_enabled` is on.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FocusScore {
+    pub day: String,
+    pub score: u8,
+    pub productive_ms: i64,
+    pub distracting_ms: i64,
+    pub neutral_ms: i64,
+}
+
 /* ------------------------------------------------------------------ *
  * Reports: get_range_overview(from, to)                              *
  * ------------------------------------------------------------------ */
@@ -208,6 +251,12 @@ pub struct Settings {
     pub bedtime_end: String,
     /// True until onboarding completes; gates the first-run flow.
     pub onboarding_complete: bool,
+    /// Phase 3+: emit a calm nudge after N minutes of continuous distracting use.
+    pub distraction_nudges_enabled: bool,
+    /// How many minutes on a distracting category before the nudge fires.
+    pub distraction_threshold_mins: u32,
+    /// Phase 3+: apply a best-effort OS grayscale during quiet hours.
+    pub bedtime_grayscale_enabled: bool,
 }
 
 /* ------------------------------------------------------------------ *
@@ -330,6 +379,11 @@ pub struct BlockRule {
     pub kind: BlockKind,
     pub pattern: String,
     pub enabled: bool,
+    /// When set, this rule only applies during the window
+    /// [`schedule_start`, `schedule_end`) (minutes since local midnight).
+    pub schedule_enabled: bool,
+    pub schedule_start: Option<i32>,
+    pub schedule_end: Option<i32>,
 }
 
 /// Argument for `set_block_rule` (`id == None` = insert).
@@ -339,6 +393,9 @@ pub struct BlockRuleInput {
     pub kind: BlockKind,
     pub pattern: String,
     pub enabled: bool,
+    pub schedule_enabled: bool,
+    pub schedule_start: Option<i32>,
+    pub schedule_end: Option<i32>,
 }
 
 /// Live focus-mode state.
@@ -389,6 +446,8 @@ pub mod event {
     pub const FOCUS_BLOCKED: &str = "focus_blocked";
     /// Phase 3: a wellbeing break is due.
     pub const BREAK_DUE: &str = "break_due";
+    /// Phase 3: gentle nudge after sustained use of a distracting category.
+    pub const DISTRACTION_NUDGE: &str = "distraction_nudge";
     /// Phase 3: a focus session ended.
     pub const FOCUS_ENDED: &str = "focus_ended";
 }
@@ -400,6 +459,10 @@ pub mod command {
     pub const GET_TODAY_OVERVIEW: &str = "get_today_overview";
     pub const GET_RANGE_OVERVIEW: &str = "get_range_overview";
     pub const GET_DAY_OVERVIEW: &str = "get_day_overview";
+    pub const GET_FOCUS_SCORE: &str = "get_focus_score";
+    pub const GET_CATEGORY_GOALS: &str = "get_category_goals";
+    pub const SET_CATEGORY_GOAL: &str = "set_category_goal";
+    pub const REMOVE_CATEGORY_GOAL: &str = "remove_category_goal";
     // Apps / Categories
     pub const GET_APPS: &str = "get_apps";
     pub const SET_APP_CATEGORY: &str = "set_app_category";

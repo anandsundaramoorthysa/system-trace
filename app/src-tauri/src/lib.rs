@@ -13,6 +13,7 @@ pub mod blocker;
 pub mod collector;
 pub mod commands;
 pub mod db;
+pub mod grayscale;
 pub mod models;
 pub mod platform;
 pub mod state;
@@ -135,6 +136,10 @@ pub fn run() {
             commands::get_today_overview,
             commands::get_range_overview,
             commands::get_day_overview,
+            commands::get_focus_score,
+            commands::get_category_goals,
+            commands::set_category_goal,
+            commands::remove_category_goal,
             commands::get_apps,
             commands::set_app_category,
             commands::get_categories,

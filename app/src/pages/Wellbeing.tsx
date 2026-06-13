@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Coffee, Moon, Play } from "lucide-react";
+import { Coffee, Moon, Play, AlertCircle } from "lucide-react";
 import { getSettings, setSetting } from "../lib/api";
 import type { Settings, SettingKey } from "../lib/types";
 import { Card, CardTitle, Spinner, Toggle } from "../components/ui";
+import { Goals } from "../components/Goals";
 
 function hhmmToMins(s: string): number {
   const [h, m] = s.split(":");
@@ -124,6 +125,57 @@ export function Wellbeing() {
         </Card>
       </div>
 
+      {/* Distraction nudges */}
+      <div className="space-y-2">
+        <CardTitle>Distraction nudges</CardTitle>
+        <Card className="p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <span
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/15 text-warning"
+                aria-hidden
+              >
+                <AlertCircle className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-body-strong text-text">Nudge me on sustained distracting use</p>
+                <p className="text-body text-text-muted">
+                  After this many continuous minutes on an app whose category is
+                  marked distracting, a quiet toast appears. Quiet hours suppress
+                  these.
+                </p>
+              </div>
+            </div>
+            <Toggle
+              checked={s.distraction_nudges_enabled}
+              onChange={(v) =>
+                save("distraction_nudges_enabled", v ? "true" : "false", {
+                  distraction_nudges_enabled: v,
+                })
+              }
+            />
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-label text-text-muted">Threshold (minutes)</span>
+              <input
+                type="number"
+                min={5}
+                max={240}
+                value={s.distraction_threshold_mins}
+                disabled={!s.distraction_nudges_enabled}
+                onChange={(e) =>
+                  save("distraction_threshold_mins", e.target.value, {
+                    distraction_threshold_mins: Number(e.target.value) || 0,
+                  })
+                }
+                className="rounded-md border border-border bg-bg px-3 py-1.5 text-body text-text disabled:opacity-50"
+              />
+            </label>
+          </div>
+        </Card>
+      </div>
+
       {/* Bedtime / wind-down */}
       <div className="space-y-2">
         <CardTitle>Wind-down (quiet hours)</CardTitle>
@@ -176,8 +228,29 @@ export function Wellbeing() {
               />
             </label>
           </div>
+
+          <div className="mt-5 flex items-start justify-between gap-4 border-t border-border pt-5">
+            <div>
+              <p className="text-body-strong text-text">Apply OS grayscale during quiet hours</p>
+              <p className="text-body text-text-muted">
+                Turns the screen monochrome on Windows, macOS, and (best-effort)
+                GNOME during quiet hours. May need a sign-out / sign-in on
+                macOS to take full effect.
+              </p>
+            </div>
+            <Toggle
+              checked={s.bedtime_grayscale_enabled}
+              onChange={(v) =>
+                save("bedtime_grayscale_enabled", v ? "true" : "false", {
+                  bedtime_grayscale_enabled: v,
+                })
+              }
+            />
+          </div>
         </Card>
       </div>
+
+      <Goals />
     </div>
   );
 }

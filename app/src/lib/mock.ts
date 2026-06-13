@@ -161,6 +161,9 @@ export function mockSettings(): Settings {
     bedtime_start: "22:00",
     bedtime_end: "07:00",
     onboarding_complete: true,
+    distraction_nudges_enabled: false,
+    distraction_threshold_mins: 20,
+    bedtime_grayscale_enabled: false,
   };
 }
 
@@ -193,8 +196,24 @@ export function mockLimits(): LimitView[] {
 
 export function mockBlockRules(): BlockRule[] {
   return [
-    { id: 1, kind: "app", pattern: "game.exe", enabled: true },
-    { id: 2, kind: "website", pattern: "reddit.com", enabled: true },
+    {
+      id: 1,
+      kind: "app",
+      pattern: "game.exe",
+      enabled: true,
+      schedule_enabled: false,
+      schedule_start: null,
+      schedule_end: null,
+    },
+    {
+      id: 2,
+      kind: "website",
+      pattern: "reddit.com",
+      enabled: true,
+      schedule_enabled: false,
+      schedule_start: null,
+      schedule_end: null,
+    },
   ];
 }
 
