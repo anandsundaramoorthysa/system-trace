@@ -1,4 +1,0 @@
-allowBuilds:
-  edgedriver: false
-  esbuild: false
-  geckodriver: false

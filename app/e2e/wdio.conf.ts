@@ -1,5 +1,8 @@
+process.env.SYSTEM_TRACE_TEST_MODE = '1';
+
 import path from 'node:path';
 import os from 'node:os';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -91,7 +94,33 @@ export const config: WebdriverIO.Config = {
     // Hooks
     // =====
     //
+    onPrepare: async () => {
+        // Fix for @wdio/tauri-service searching for binary with spaces (derived from productName)
+        // while Cargo produces hyphenated binary.
+        if (os.platform() !== 'win32') {
+            const expectedBinaryPath = path.resolve(tauriRoot, 'target', buildMode, 'system trace');
+            if (!fs.existsSync(expectedBinaryPath) && fs.existsSync(binaryPath)) {
+                try {
+                    fs.linkSync(binaryPath, expectedBinaryPath);
+                } catch (e) {
+                    try { fs.symlinkSync(binaryPath, expectedBinaryPath); } catch (e2) {}
+                }
+            }
+        }
+    },
+
     beforeSession: async () => {
-        process.env.SYSTEM_TRACE_TEST_MODE = '1';
+        // test mode env moved to top of file
+    },
+
+    onComplete: async () => {
+        if (os.platform() !== 'win32') {
+            const expectedBinaryPath = path.resolve(tauriRoot, 'target', buildMode, 'system trace');
+            if (fs.existsSync(expectedBinaryPath)) {
+                try {
+                    fs.unlinkSync(expectedBinaryPath);
+                } catch (e) {}
+            }
+        }
     },
 };

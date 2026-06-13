@@ -41,7 +41,9 @@ export function Topbar({
 
   return (
     <header className="flex items-center justify-between border-b border-border bg-bg px-6 py-3.5">
-      <h1 className="text-h2 text-text">{title}</h1>
+      <h1 data-testid="page-title" className="text-h2 text-text">
+        {title}
+      </h1>
 
       <div className="flex items-center gap-3">
         <span className="flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-label text-text-muted">
@@ -58,7 +60,11 @@ export function Topbar({
           className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text transition-colors duration-hover hover:bg-surface-2"
           aria-pressed={paused}
         >
-          {paused ? <Play className="h-4 w-4" aria-hidden /> : <Pause className="h-4 w-4" aria-hidden />}
+          {paused ? (
+            <Play className="h-4 w-4" aria-hidden />
+          ) : (
+            <Pause className="h-4 w-4" aria-hidden />
+          )}
           {paused ? "Resume" : "Pause"}
         </button>
 

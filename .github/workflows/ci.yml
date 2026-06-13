@@ -80,7 +80,6 @@ jobs:
 
   test-e2e:
     name: E2E Tests (Linux)
-    needs: build
     runs-on: ubuntu-22.04
     defaults:
       run:

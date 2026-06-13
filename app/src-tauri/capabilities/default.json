@@ -7,6 +7,7 @@
     "core:default",
     "dialog:allow-save",
     "dialog:allow-open",
-    "notification:default"
+    "notification:default",
+    "wdio:default"
   ]
 }

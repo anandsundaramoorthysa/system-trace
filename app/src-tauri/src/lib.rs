@@ -41,6 +41,7 @@ pub fn run() {
             Some(vec!["--minimized"]),
         ))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_wdio::init())
         .setup(|app| {
             // Check for test mode to avoid polluting real user data.
             let is_test = std::env::var("SYSTEM_TRACE_TEST_MODE").is_ok();

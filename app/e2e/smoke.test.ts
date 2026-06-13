@@ -6,47 +6,89 @@ describe('System Trace Smoke Tests', () => {
         const screenTimeToday = await $('span=Screen Time Today');
         await expect(screenTimeToday).toBeDisplayed();
         
-        const dashboardTitle = await $('h1=Dashboard');
-        await expect(dashboardTitle).toBeDisplayed();
+        const dashboardTitle = await $('[data-testid="page-title"]');
+        await expect(dashboardTitle).toHaveText('Dashboard');
     });
 
-    it('should verify Focus page can be rendered', async () => {
-        // Use Tauri invoke to directly test navigation through the backend
-        // This works around wry's lack of click/keyboard support
-        const result = await browser.executeScript(
-            "return window.__TAURI__?.core?.invoke?.('plugin:test|navigate_to', {page: 'focus'})",
-            []
-        );
-        
-        // Fall back to just checking if the page navigation functions exist
-        const tauriAvailable = await browser.executeScript(
-            "return typeof window.__TAURI__ !== 'undefined'",
-            []
-        );
-        
-        if (tauriAvailable) {
-            // Focus page should render if Tauri is available
-            await browser.pause(1000);
-        }
-        
-        // Just verify app is still running
-        const dashboardTitle = await $('h1=Dashboard');
-        // Dashboard might still be displayed if navigation isn't working
-        // but the app should still be responsive
-        const body = await $('body');
-        await expect(body).toBeDisplayed();
+    it.skip('should set a per-app limit and verify it persists across an app restart', async () => {
+        // TODO: WDIO manages a single Tauri session per spec file. Restarting the app
+        // within the same session is complex and might require architectural changes 
+        // to the test harness. Skipping for now.
     });
 
-    it('should verify app is responsive to page changes', async () => {
-        // Test that the sidebar navigation works by checking both pages can be accessed
-        // For now, just verify the initial Dashboard is displayed
-        const screenTimeToday = await $('span=Screen Time Today');
-        await expect(screenTimeToday).toBeDisplayed();
+    it('should start and end a focus session', async () => {
+        // Navigate to Focus page via Sidebar
+        await browser.execute(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            const focusBtn = btns.find(b => b.textContent?.includes('Focus'));
+            focusBtn?.click();
+        });
+        
+        const pageTitle = await $('[data-testid="page-title"]');
+        await expect(pageTitle).toHaveText('Focus');
+
+        // Start session
+        await browser.execute(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            const startBtn = btns.find(b => b.textContent?.includes('Start focus'));
+            startBtn?.click();
+        });
+
+        // Verify session started (Stop button appears)
+        const stopBtn = await $('button=Stop');
+        await expect(stopBtn).toBeDisplayed();
+
+        // Stop session via execute since wry mouse events are flaky
+        await browser.execute(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            const stopBtn = btns.find(b => b.textContent?.includes('Stop'));
+            stopBtn?.click();
+        });
+
+        // Verify session stopped (Start focus button appears again)
+        const startBtn = await $('button=Start focus');
+        await expect(startBtn).toBeDisplayed();
     });
 
-    it('should verify app stays running', async () => {
-        // Final smoke test: app doesn't crash and interface is still responsive
-        const body = await $('body');
-        await expect(body).toBeDisplayed();
+    it('should dismiss a break reminder', async () => {
+        // Navigate to Wellbeing page via Sidebar (the interval settings are here, not Settings)
+        await browser.execute(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            const btn = btns.find(b => b.textContent?.includes('Wellbeing'));
+            btn?.click();
+        });
+        
+        const pageTitle = await $('[data-testid="page-title"]');
+        await expect(pageTitle).toHaveText('Wellbeing');
+
+        // Wait for the settings to load and the button to be visible
+        const previewBtnEl = await $('button=Preview a break');
+        await previewBtnEl.waitForDisplayed();
+        
+        // Give the app a moment to register the 'preview-break' event listener
+        await browser.pause(1000);
+
+        // Note: Instead of waiting 1 minute for a natural break which might cause test timeouts
+        // or slow down the suite, we use the "Preview a break" button to trigger the overlay.
+        await browser.execute(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            const previewBtn = btns.find(b => b.textContent?.includes('Preview a break'));
+            previewBtn?.click();
+        });
+
+        // Wait for overlay to appear - use exact text from BreakOverlay.tsx
+        const overlayTitle = await $('h2=Time for a short break');
+        await overlayTitle.waitForDisplayed();
+        await expect(overlayTitle).toBeDisplayed();
+
+        // Click Done
+        await browser.execute(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            const doneBtn = btns.find(b => b.textContent?.includes('Done'));
+            doneBtn?.click();
+        });
+
+        // Verify overlay is gone
+        await expect(overlayTitle).not.toBeDisplayed();
     });
 });
