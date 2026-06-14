@@ -135,6 +135,8 @@ pub fn run() {
                             "could not open encrypted database ({e}); quarantining it and starting fresh"
                         );
                         if enc_path.exists() {
+                            let _ = db::prune_corrupt_snapshot(&enc_path);
+
                             let _ = std::fs::rename(
                                 &enc_path,
                                 enc_path.with_extension("enc.corrupt"),

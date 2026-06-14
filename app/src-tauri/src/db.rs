@@ -10,6 +10,7 @@ use crate::models::*;
 use chrono::{DateTime, Duration, Local, NaiveDate, TimeZone, Timelike};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::BTreeMap;
+use std::path::Path;
 
 pub type DbResult<T> = Result<T, String>;
 
@@ -97,6 +98,19 @@ pub fn snapshot_encrypted(
     let tmp = enc_path.with_extension("enc.tmp");
     std::fs::write(&tmp, &blob).map_err(map_err)?;
     std::fs::rename(&tmp, enc_path).map_err(map_err)?;
+    Ok(())
+}
+
+/// Keep at most one quarantined encrypted snapshot.
+/// Any previous `.enc.corrupt` file is removed before a new
+/// quarantine file is created.
+pub fn prune_corrupt_snapshot(enc_path: &Path) -> DbResult<()> {
+    let corrupt = enc_path.with_extension("enc.corrupt");
+
+    if corrupt.exists() {
+        std::fs::remove_file(&corrupt).map_err(map_err)?;
+    }
+
     Ok(())
 }
 
@@ -1965,6 +1979,29 @@ mod tests {
         assert!(open_encrypted(&tmp, &[1u8; 32], &legacy).is_err());
 
         let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn prune_removes_existing_quarantine_before_replacement() {
+        let base = std::env::temp_dir().join(format!("st-prune-test-{}", std::process::id()));
+
+        let corrupt = base.with_extension("enc.corrupt");
+
+        let _ = std::fs::remove_file(&corrupt);
+
+        std::fs::write(&corrupt, b"old").unwrap();
+
+        assert!(corrupt.exists());
+
+        prune_corrupt_snapshot(&base).unwrap();
+
+        assert!(!corrupt.exists());
+
+        std::fs::write(&corrupt, b"new").unwrap();
+
+        assert!(corrupt.exists());
+
+        let _ = std::fs::remove_file(&corrupt);
     }
 
     #[test]
