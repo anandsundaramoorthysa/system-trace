@@ -8,8 +8,9 @@
 //! - **macOS**: shells out to `defaults write com.apple.universalaccess` and
 //!   reloads the prefs. Best-effort; the user may need to sign out / in for
 //!   the change to fully take. Requires no admin.
-//! - **Linux**: tries `gsettings` for GNOME's `org.gnome.desktop.a11y`
-//!   schema. Other desktops are a no-op (returns `Ok(false)`).
+//! - **Linux**: swaps GNOME's `gtk-theme` to `HighContrast` via `gsettings`,
+//!   remembering and restoring the user's previous theme so it is never
+//!   clobbered. Other desktops are a no-op (returns `Ok(false)`).
 //!
 //! Every call returns `Ok(true)` on a successful change, `Ok(false)` when
 //! the platform path is a no-op, or `Err` on a hard failure that should be
@@ -108,18 +109,93 @@ pub fn set_grayscale(on: bool) -> Result<bool, String> {
 }
 
 #[cfg(target_os = "linux")]
+const GTK_SCHEMA: &str = "org.gnome.desktop.interface";
+#[cfg(target_os = "linux")]
+const GTK_THEME_KEY: &str = "gtk-theme";
+#[cfg(target_os = "linux")]
+const GRAY_THEME: &str = "HighContrast";
+
+#[cfg(target_os = "linux")]
 pub fn set_grayscale(on: bool) -> Result<bool, String> {
-    use std::process::Command;
-    // GNOME: high-contrast desktop theme as a best-effort grayscale-ish
-    // substitute. The native a11y schema does not expose a true greyscale
-    // filter without third-party extensions, so this is the closest cross-
-    // distro lever we have here.
-    let theme = if on { "HighContrast" } else { "Adwaita" };
-    let out = Command::new("gsettings")
-        .args(["set", "org.gnome.desktop.interface", "gtk-theme", theme])
-        .output();
-    match out {
-        Ok(o) if o.status.success() => Ok(true),
-        _ => Ok(false),
+    // GNOME has no built-in grayscale filter without third-party extensions, so
+    // the closest cross-distro lever is swapping to the HighContrast gtk-theme.
+    // To avoid clobbering whatever theme the user actually runs, we remember it
+    // before switching and restore it when grayscale turns off. The previous
+    // theme is persisted to a small state file so a restart between "on" and
+    // "off" (e.g. across an overnight bedtime window) still restores the right
+    // theme rather than resetting to a hardcoded default.
+    if on {
+        // Save the current theme once. Skip if grayscale is already applied, so
+        // a second "on" call can never overwrite the saved original with the
+        // HighContrast theme.
+        if let Some(current) = current_theme() {
+            if !current.is_empty() && current != GRAY_THEME {
+                let _ = save_prev_theme(&current);
+            }
+        }
+        Ok(set_theme(GRAY_THEME))
+    } else {
+        // Restore the saved theme; fall back to Adwaita only if nothing was
+        // saved (e.g. an "off" with no prior "on").
+        let prev = take_prev_theme().unwrap_or_else(|| "Adwaita".to_string());
+        Ok(set_theme(&prev))
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn set_theme(theme: &str) -> bool {
+    std::process::Command::new("gsettings")
+        .args(["set", GTK_SCHEMA, GTK_THEME_KEY, theme])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "linux")]
+fn current_theme() -> Option<String> {
+    let out = std::process::Command::new("gsettings")
+        .args(["get", GTK_SCHEMA, GTK_THEME_KEY])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    // gsettings prints the value GVariant-quoted, e.g. `'Adwaita-dark'\n`.
+    let s = String::from_utf8_lossy(&out.stdout);
+    Some(s.trim().trim_matches('\'').to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn prev_theme_path() -> std::path::PathBuf {
+    use std::path::PathBuf;
+    // Persist under XDG_STATE_HOME (or ~/.local/state) so the saved theme
+    // survives a restart between turning grayscale on and off.
+    let base = std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))
+        .unwrap_or_else(std::env::temp_dir);
+    base.join("system-trace").join("grayscale-prev-theme")
+}
+
+#[cfg(target_os = "linux")]
+fn save_prev_theme(theme: &str) -> std::io::Result<()> {
+    let path = prev_theme_path();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(path, theme)
+}
+
+#[cfg(target_os = "linux")]
+fn take_prev_theme() -> Option<String> {
+    let path = prev_theme_path();
+    let theme = std::fs::read_to_string(&path).ok()?;
+    let _ = std::fs::remove_file(&path);
+    let theme = theme.trim().to_string();
+    if theme.is_empty() {
+        None
+    } else {
+        Some(theme)
     }
 }
