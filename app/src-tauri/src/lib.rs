@@ -129,7 +129,10 @@ pub fn run() {
                 // corruption), quarantine it and start fresh so the app still
                 // launches instead of panicking on every boot.
                 let conn = match db::open_encrypted(&enc_path, &key, &db_path) {
-                    Ok(c) => c,
+                    Ok(c) => {
+                        let _ = db::prune_corrupt_snapshot(&enc_path);
+                        c
+                    }
                     Err(e) => {
                         log::error!(
                             "could not open encrypted database ({e}); quarantining it and starting fresh"
