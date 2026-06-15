@@ -31,7 +31,7 @@ impl LinuxWatcher {
             WatcherImpl::Wayland(Box::new(WaylandWatcher::new()))
         } else {
             log::info!("X11 session detected, starting X11Watcher");
-            WatcherImpl::X11(Box::new(X11Watcher::new()))
+            WatcherImpl::X11(Box::default())
         };
         LinuxWatcher { inner }
     }
