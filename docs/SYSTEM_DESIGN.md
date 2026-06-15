@@ -113,14 +113,48 @@ Implementations:
 | Windows | `GetForegroundWindow`, `GetWindowThreadProcessId` -> process exe name; `GetWindowText` for title | `GetLastInputInfo` | audio session via WASAPI/IAudioMeterInformation (best-effort) | `WTSGetActiveConsoleSessionId` / session notifications |
 | macOS | `NSWorkspace.frontmostApplication`; title via Accessibility API (needs permission) | `CGEventSource secondsSinceLastEventType` | `now playing` / audio (best-effort) | `CGSessionCopyCurrentDictionary` |
 | Linux (X11) | `_NET_ACTIVE_WINDOW` (EWMH), `WM_CLASS`, `_NET_WM_NAME` | `XScreenSaverQueryInfo` | PipeWire/PulseAudio sink check (best-effort) | screensaver/DBus |
-| Linux (Wayland) | compositor-specific or `xdg-desktop-portal`; fall back gracefully | idle via `org.freedesktop.idle` portal | as above | login1/DBus |
+| Linux (Wayland) | KDE (KWin Script callback via D-Bus) / GNOME (Focused Window extension or Eval) | GNOME (Mutter IdleMonitor); KDE (defaults to 0 when active window known) | ALSA procfs check (best-effort) | `org.freedesktop.ScreenSaver` D-Bus |
 
 Rule: the trait is implemented per OS behind `#[cfg(target_os = ...)]`. The core
 never calls OS APIs directly. Title and media are best-effort; if an OS cannot
 provide them, return `None`/`false` and the app still works.
 
 Crates to use: `windows` (Win32), `core-graphics`/`cocoa`/`objc` (macOS),
-`x11rb` and `wayland-client`/`zbus` (Linux).
+`x11rb` and `zbus` (Linux).
+
+### 5.1 Linux Wayland Watcher Design & Fallbacks
+
+Wayland sessions enforce strict application isolation. Standard apps cannot query global window focus or titles directly. To implement tracking on Wayland, System Trace uses a D-Bus first strategy.
+
+#### Chosen Approach and Trade-off Analysis
+
+To track the active window on Wayland, two main approaches were evaluated:
+- **Option A (D-Bus Interfaces)**: Query GNOME Shell (via Focused Window D-Bus extension or `Eval`) and KDE Plasma (via temporary KWin scripting calling a D-Bus receiver).
+- **Option B (Wayland Protocol Extensions)**: Use protocols like `ext-foreground-toplevel-v1` or `wlr-foreign-toplevel-management`.
+
+**Trade-offs & Decision**:
+- **Compatibility**: Option A (D-Bus-first) has maximum compatibility with standard Linux distributions (Fedora, Ubuntu, etc.) since they ship GNOME and KDE Plasma by default. Option B lacks widespread adoption on mainstream environments; notably, GNOME (Mutter) does not implement the `wlr-foreign-toplevel-management` or foreground toplevel protocols.
+- **Complexity**: Option A requires writing different logic paths for different desktop environments (GNOME Shell extensions/D-Bus vs. KWin Scripting). Option B is theoretically cleaner and compositor-agnostic where supported (e.g., wlroots/sway/Hyprland), but offers no path on standard Ubuntu/Fedora setups.
+- **Conclusion**: We selected Option A (D-Bus-first) to ensure that the core target audience of standard Linux desktop users (Ubuntu/Fedora/openSUSE) is supported, while falling back gracefully to X11 or degraded tracking on unsupported compositors.
+
+1. **GNOME Shell**:
+   - First checks the `org.gnome.Shell.extensions.FocusedWindow` D-Bus extension (a popular user extension exposing the focused window metadata).
+   - If not installed, falls back to `org.gnome.Shell.Eval` D-Bus method to execute a private JavaScript snippet to query the active window class and title. Note that `Eval` is restricted on GNOME 41+ unless "unsafe mode" is explicitly enabled.
+   
+2. **KDE Plasma (KWin)**:
+   - On watcher startup, the application registers a local D-Bus receiver (`org.system_trace.Receiver`).
+   - It writes and registers a temporary KWin Script that listens to window activation signals (`workspace.windowActivated` / `workspace.clientActivated`) and calls back to the receiver whenever the active window changes.
+
+3. **Runtime Routing Matrix**:
+   - On startup, the application reads the `XDG_SESSION_TYPE` environment variable (falling back to checking `WAYLAND_DISPLAY` and `DISPLAY`).
+   - If `wayland` is detected, it runs the `WaylandWatcher`.
+   - If `x11` is detected, it falls back to the `X11Watcher`.
+   - If neither, it degrades gracefully.
+
+4. **Idle & Lock Handling**:
+   - GNOME Wayland idle time is queried via `org.gnome.Mutter.IdleMonitor` D-Bus interface.
+   - KDE Wayland defaults to `0` (active) when a foreground window is known to prevent false-idle conditions since there is no stable public idle D-Bus API.
+   - Screen locking is detected by checking the `org.freedesktop.ScreenSaver` D-Bus interface.
 
 ## 6. Data Model (SQLite)
 

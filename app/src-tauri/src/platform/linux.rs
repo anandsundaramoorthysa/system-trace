@@ -1,27 +1,20 @@
-//! Linux watcher (X11). SYSTEM_DESIGN.md section 5.
+//! Linux watcher (X11 & Wayland). SYSTEM_DESIGN.md section 5.
 //!
-//! Active window via the EWMH `_NET_ACTIVE_WINDOW` hint, with `WM_CLASS` as the
-//! app_key and `_NET_WM_NAME` as the title. Idle via the X SCREENSAVER extension
-//! (`ms_since_user_input`). Wayland is not covered yet; under Wayland the EWMH
-//! query returns nothing and the app degrades to no tracking until the portal
-//! path lands (see SYSTEM_DESIGN.md section 16).
-//!
-//! NOTE: this file is `#[cfg(target_os = "linux")]` and is therefore compiled and
-//! verified by the Linux CI job, not on a Windows dev box.
+//! Route active window and idle monitoring to the X11 or Wayland tracking systems.
 
 #![cfg(target_os = "linux")]
 
 use super::{ActiveWindow, Watcher};
-use x11rb::connection::Connection;
-use x11rb::protocol::screensaver::ConnectionExt as _;
-use x11rb::protocol::xproto::{AtomEnum, ConnectionExt as _, Window};
-use x11rb::rust_connection::RustConnection;
+use super::linux_wayland::WaylandWatcher;
+use super::linux_x11::X11Watcher;
 
 pub struct LinuxWatcher {
-    conn: Option<(RustConnection, Window)>,
-    /// Whether the X SCREENSAVER extension answered our probe at startup. When
-    /// false we have no idle signal at all.
-    idle_supported: bool,
+    inner: WatcherImpl,
+}
+
+enum WatcherImpl {
+    X11(X11Watcher),
+    Wayland(WaylandWatcher),
 }
 
 impl Default for LinuxWatcher {
@@ -32,145 +25,103 @@ impl Default for LinuxWatcher {
 
 impl LinuxWatcher {
     pub fn new() -> Self {
-        let conn = x11rb::connect(None).ok().map(|(c, screen)| {
-            let root = c.setup().roots[screen].root;
-            (c, root)
-        });
-        // Probe the SCREENSAVER extension once so idle_ms can tell "no idle
-        // signal available" apart from "user just had input".
-        let idle_supported = conn
-            .as_ref()
-            .map(|(c, root)| {
-                c.screensaver_query_info(*root)
-                    .ok()
-                    .and_then(|cookie| cookie.reply().ok())
-                    .is_some()
-            })
-            .unwrap_or(false);
-        LinuxWatcher {
-            conn,
-            idle_supported,
-        }
-    }
-
-    fn atom(&self, name: &[u8]) -> Option<u32> {
-        let (c, _) = self.conn.as_ref()?;
-        c.intern_atom(false, name)
-            .ok()?
-            .reply()
-            .ok()
-            .map(|r| r.atom)
-    }
-
-    fn query_active(&self) -> Option<ActiveWindow> {
-        let (c, root) = self.conn.as_ref()?;
-        let net_active = self.atom(b"_NET_ACTIVE_WINDOW")?;
-        let prop = c
-            .get_property(false, *root, net_active, AtomEnum::WINDOW, 0, 1)
-            .ok()?
-            .reply()
-            .ok()?;
-        let win = prop.value32()?.next()? as Window;
-        if win == 0 {
-            return None;
-        }
-
-        // WM_CLASS is "instance\0class\0"; prefer the class as the stable key.
-        let class = c
-            .get_property(false, win, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, 1024)
-            .ok()?
-            .reply()
-            .ok()?;
-        let parts: Vec<&[u8]> = class
-            .value
-            .split(|&b| b == 0)
-            .filter(|s| !s.is_empty())
-            .collect();
-        let app_key = parts
-            .get(1)
-            .or_else(|| parts.first())
-            .map(|s| String::from_utf8_lossy(s).into_owned())
-            .unwrap_or_else(|| "unknown".to_string());
-
-        // Title via _NET_WM_NAME (UTF8_STRING); best-effort.
-        let title = match (self.atom(b"_NET_WM_NAME"), self.atom(b"UTF8_STRING")) {
-            (Some(name_atom), Some(utf8)) => c
-                .get_property(false, win, name_atom, utf8, 0, 1024)
-                .ok()
-                .and_then(|cookie| cookie.reply().ok())
-                .map(|r| String::from_utf8_lossy(&r.value).into_owned())
-                .filter(|s| !s.is_empty()),
-            _ => None,
+        let is_wayland = detect_session_type() == "wayland";
+        let inner = if is_wayland {
+            log::info!("Wayland session detected, starting WaylandWatcher");
+            WatcherImpl::Wayland(WaylandWatcher::new())
+        } else {
+            log::info!("X11 session detected, starting X11Watcher");
+            WatcherImpl::X11(X11Watcher::new())
         };
-
-        Some(ActiveWindow {
-            app_name: app_key.clone(),
-            app_key,
-            title,
-            // No reliable per-window executable path on X11/Wayland.
-            app_path: None,
-        })
+        LinuxWatcher { inner }
     }
 }
 
 impl Watcher for LinuxWatcher {
     fn active_window(&mut self) -> Option<ActiveWindow> {
-        self.query_active()
+        match &mut self.inner {
+            WatcherImpl::X11(w) => w.active_window(),
+            WatcherImpl::Wayland(w) => w.active_window(),
+        }
     }
 
     fn idle_ms(&mut self) -> u64 {
-        // When we have no idle signal - no X connection (e.g. Wayland) or an X
-        // server without the SCREENSAVER extension - report "fully idle"
-        // (u64::MAX) rather than 0. Returning 0 means "the user just had input",
-        // which would count the foreground app as active around the clock even
-        // while the user is away. Reporting idle instead makes the collector
-        // stop accumulating, which is the safe direction. (Under Wayland
-        // active_window() also returns None, so no session is open anyway.)
-        let Some((c, root)) = self.conn.as_ref() else {
-            return u64::MAX;
-        };
-        if !self.idle_supported {
-            return u64::MAX;
+        match &mut self.inner {
+            WatcherImpl::X11(w) => w.idle_ms(),
+            WatcherImpl::Wayland(w) => w.idle_ms(),
         }
-        c.screensaver_query_info(*root)
-            .ok()
-            .and_then(|cookie| cookie.reply().ok())
-            .map(|r| r.ms_since_user_input as u64)
-            .unwrap_or(u64::MAX)
     }
 
     fn is_media_playing(&mut self) -> bool {
-        // Best-effort and dependency-free: ALSA exposes a per-substream status
-        // file under /proc/asound. A playback substream reads "RUNNING" while
-        // audio is actually flowing, so we scan the playback ("pcm*p") streams.
-        // This catches PipeWire/Pulse output too, since they sit on top of ALSA.
-        use std::fs;
-        let Ok(cards) = fs::read_dir("/proc/asound") else {
-            return false;
+        match &mut self.inner {
+            WatcherImpl::X11(w) => w.is_media_playing(),
+            WatcherImpl::Wayland(w) => w.is_media_playing(),
+        }
+    }
+
+    fn session_locked(&mut self) -> bool {
+        match &mut self.inner {
+            WatcherImpl::X11(w) => w.session_locked(),
+            WatcherImpl::Wayland(w) => w.session_locked(),
+        }
+    }
+
+    fn set_capture_titles(&mut self, on: bool) {
+        match &mut self.inner {
+            WatcherImpl::X11(w) => w.set_capture_titles(on),
+            WatcherImpl::Wayland(w) => w.set_capture_titles(on),
+        }
+    }
+}
+
+/// Helper function to detect session type at runtime
+fn detect_session_type() -> &'static str {
+    if let Ok(val) = std::env::var("XDG_SESSION_TYPE") {
+        let val_lower = val.to_lowercase();
+        if val_lower == "wayland" {
+            return "wayland";
+        }
+        if val_lower == "x11" {
+            return "x11";
+        }
+    }
+    // Fallbacks
+    if std::env::var("WAYLAND_DISPLAY").is_ok() {
+        "wayland"
+    } else if std::env::var("DISPLAY").is_ok() {
+        "x11"
+    } else {
+        "unknown"
+    }
+}
+
+/// Shared ALSA implementation for media playback monitoring
+pub(crate) fn is_alsa_media_playing() -> bool {
+    use std::fs;
+    let Ok(cards) = fs::read_dir("/proc/asound") else {
+        return false;
+    };
+    for card in cards.flatten() {
+        let Ok(pcms) = fs::read_dir(card.path()) else {
+            continue;
         };
-        for card in cards.flatten() {
-            let Ok(pcms) = fs::read_dir(card.path()) else {
+        for pcm in pcms.flatten() {
+            let name = pcm.file_name();
+            let name = name.to_string_lossy();
+            if !(name.starts_with("pcm") && name.ends_with('p')) {
+                continue;
+            }
+            let Ok(subs) = fs::read_dir(pcm.path()) else {
                 continue;
             };
-            for pcm in pcms.flatten() {
-                let name = pcm.file_name();
-                let name = name.to_string_lossy();
-                // Playback devices are named like "pcm0p".
-                if !(name.starts_with("pcm") && name.ends_with('p')) {
-                    continue;
-                }
-                let Ok(subs) = fs::read_dir(pcm.path()) else {
-                    continue;
-                };
-                for sub in subs.flatten() {
-                    if let Ok(s) = fs::read_to_string(sub.path().join("status")) {
-                        if s.contains("RUNNING") {
-                            return true;
-                        }
+            for sub in subs.flatten() {
+                if let Ok(s) = fs::read_to_string(sub.path().join("status")) {
+                    if s.contains("RUNNING") {
+                        return true;
                     }
                 }
             }
         }
-        false
     }
+    false
 }
