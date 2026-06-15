@@ -4060,7 +4060,7 @@ dependencies = [
 
 [[package]]
 name = "system-trace"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "chacha20poly1305",
  "chrono",
@@ -4068,6 +4068,7 @@ dependencies = [
  "core-foundation 0.9.4",
  "core-graphics 0.23.2",
  "env_logger",
+ "image",
  "keyring",
  "log",
  "objc",

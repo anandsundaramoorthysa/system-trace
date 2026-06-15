@@ -66,13 +66,33 @@ pub fn get_app_goals(state: State<AppState>) -> R<Vec<AppGoal>> {
 /// avatar when this is `None`.
 #[tauri::command(rename_all = "snake_case")]
 pub fn get_app_icon(state: State<AppState>, app_key: String) -> R<Option<AppIcon>> {
-    let path = {
+    #[allow(unused_mut)]
+    let mut path = {
         let conn = lock(&state.db)?;
         db::get_app_path(&conn, &app_key)?
     };
+
+    #[cfg(target_os = "linux")]
+    if path.is_none() {
+        if let Some(resolved) = crate::icon::resolve_linux_icon(&app_key) {
+            let conn = lock(&state.db)?;
+            let _ = db::set_app_path(&conn, &app_key, &resolved);
+            path = Some(resolved);
+        } else {
+            let conn = lock(&state.db)?;
+            let _ = db::set_app_path(&conn, &app_key, "none");
+            path = Some("none".to_string());
+        }
+    }
+
     let Some(path) = path else {
         return Ok(None);
     };
+
+    if path == "none" {
+        return Ok(None);
+    }
+
     Ok(
         crate::icon::extract_icon_rgba(&path).map(|(width, height, rgba)| AppIcon {
             width,

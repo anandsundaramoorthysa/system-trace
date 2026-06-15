@@ -178,9 +178,414 @@ struct NSRectF {
     h: f64,
 }
 
-#[cfg(target_os = "linux")]
-pub fn extract_icon_rgba(_path: &str) -> Option<Rgba> {
-    // Desktop icon-theme resolution is distro/DE-specific; the UI falls back to
-    // a letter avatar here. (A future enhancement could parse .desktop files.)
+#[cfg(any(target_os = "linux", test))]
+fn get_desktop_dirs() -> Vec<std::path::PathBuf> {
+    let mut dirs = Vec::new();
+
+    // ~/.local/share/applications
+    if let Ok(home) = std::env::var("HOME") {
+        let p = std::path::PathBuf::from(&home).join(".local/share/applications");
+        if p.exists() {
+            dirs.push(p);
+        }
+    }
+
+    // XDG_DATA_HOME
+    if let Ok(xdg_data_home) = std::env::var("XDG_DATA_HOME") {
+        let p = std::path::PathBuf::from(xdg_data_home).join("applications");
+        if p.exists() && !dirs.contains(&p) {
+            dirs.push(p);
+        }
+    }
+
+    // XDG_DATA_DIRS
+    if let Ok(xdg_data_dirs) = std::env::var("XDG_DATA_DIRS") {
+        let separator = if cfg!(windows) { ';' } else { ':' };
+        for dir in xdg_data_dirs.split(separator) {
+            if !dir.is_empty() {
+                let p = std::path::PathBuf::from(dir).join("applications");
+                if p.exists() && !dirs.contains(&p) {
+                    dirs.push(p);
+                }
+            }
+        }
+    } else {
+        // Defaults
+        for path in &["/usr/share/applications", "/usr/local/share/applications"] {
+            let p = std::path::PathBuf::from(path);
+            if p.exists() && !dirs.contains(&p) {
+                dirs.push(p);
+            }
+        }
+    }
+    dirs
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn find_desktop_file(app_key: &str) -> Option<std::path::PathBuf> {
+    let dirs = get_desktop_dirs();
+    let app_key_lower = app_key.to_lowercase();
+    let exact_name = format!("{}.desktop", app_key);
+    let lower_name = format!("{}.desktop", app_key_lower);
+
+    // Phase 1: Exact matches in all dirs
+    for dir in &dirs {
+        let p1 = dir.join(&exact_name);
+        if p1.is_file() {
+            return Some(p1);
+        }
+        let p2 = dir.join(&lower_name);
+        if p2.is_file() {
+            return Some(p2);
+        }
+    }
+
+    // Phase 2: Check for prefix/suffix match (e.g. org.gnome.Nautilus.desktop or firefox-esr.desktop)
+    for dir in &dirs {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+                        if let Some(stem) = filename.strip_suffix(".desktop") {
+                            let stem_lower = stem.to_lowercase();
+                            if stem_lower == app_key_lower
+                                || stem_lower.split('.').any(|part| part == app_key_lower)
+                                || stem_lower.contains(&app_key_lower)
+                            {
+                                return Some(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     None
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn get_icon_name_from_desktop(path: &std::path::Path) -> Option<String> {
+    let content = std::fs::read_to_string(path).ok()?;
+    let mut in_desktop_entry = false;
+    let mut fallback_icon = None;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            let section = &trimmed[1..trimmed.len() - 1];
+            in_desktop_entry = section == "Desktop Entry";
+        }
+        if let Some(stripped) = trimmed.strip_prefix("Icon=") {
+            let value = stripped.trim().to_string();
+            if !value.is_empty() {
+                if in_desktop_entry {
+                    return Some(value);
+                } else if fallback_icon.is_none() {
+                    fallback_icon = Some(value);
+                }
+            }
+        }
+    }
+    fallback_icon
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn get_gtk_theme_name() -> Option<String> {
+    let home = std::env::var("HOME").ok()?;
+    for version in &["gtk-3.0", "gtk-4.0"] {
+        let path = std::path::PathBuf::from(&home)
+            .join(".config")
+            .join(version)
+            .join("settings.ini");
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("gtk-icon-theme-name") {
+                    if let Some(idx) = trimmed.find('=') {
+                        let val = trimmed[idx + 1..].trim();
+                        if !val.is_empty() {
+                            return Some(val.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn get_icon_base_dirs() -> Vec<std::path::PathBuf> {
+    let mut dirs = Vec::new();
+
+    if let Ok(home) = std::env::var("HOME") {
+        let p1 = std::path::PathBuf::from(&home).join(".local/share/icons");
+        if p1.exists() {
+            dirs.push(p1);
+        }
+        let p2 = std::path::PathBuf::from(&home).join(".icons");
+        if p2.exists() {
+            dirs.push(p2);
+        }
+    }
+
+    if let Ok(xdg_data_dirs) = std::env::var("XDG_DATA_DIRS") {
+        let separator = if cfg!(windows) { ';' } else { ':' };
+        for dir in xdg_data_dirs.split(separator) {
+            if !dir.is_empty() {
+                let p = std::path::PathBuf::from(dir).join("icons");
+                if p.exists() && !dirs.contains(&p) {
+                    dirs.push(p);
+                }
+            }
+        }
+    } else {
+        let p = std::path::PathBuf::from("/usr/share/icons");
+        if p.exists() && !dirs.contains(&p) {
+            dirs.push(p);
+        }
+    }
+    dirs
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn extract_size_from_path(path: &str) -> Option<u32> {
+    for part in path.split(['/', '\\']) {
+        if let Some(x_idx) = part.find('x') {
+            let width_str = &part[..x_idx];
+            let height_str = &part[x_idx + 1..];
+            if let (Ok(w), Ok(h)) = (width_str.parse::<u32>(), height_str.parse::<u32>()) {
+                if w == h {
+                    return Some(w);
+                }
+            }
+        } else if let Ok(size) = part.parse::<u32>() {
+            return Some(size);
+        }
+    }
+    None
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn find_icon_file_in_theme(
+    theme_dir: &std::path::Path,
+    icon_name: &str,
+) -> Option<std::path::PathBuf> {
+    let mut candidates = Vec::new();
+    let icon_file_png = format!("{}.png", icon_name);
+    let icon_file_png_lower = icon_file_png.to_lowercase();
+
+    fn walk(
+        dir: &std::path::Path,
+        filename_png: &str,
+        filename_png_lower: &str,
+        candidates: &mut Vec<std::path::PathBuf>,
+    ) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, filename_png, filename_png_lower, candidates);
+                } else if path.is_file() {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        let name_lower = name.to_lowercase();
+                        if name == filename_png || name_lower == filename_png_lower {
+                            candidates.push(path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    walk(
+        theme_dir,
+        &icon_file_png,
+        &icon_file_png_lower,
+        &mut candidates,
+    );
+
+    if !candidates.is_empty() {
+        candidates.sort_by(|a, b| {
+            let a_str = a.to_string_lossy().to_lowercase();
+            let b_str = b.to_string_lossy().to_lowercase();
+
+            let a_has_apps = a_str.contains("apps");
+            let b_has_apps = b_str.contains("apps");
+            if a_has_apps != b_has_apps {
+                return b_has_apps.cmp(&a_has_apps);
+            }
+
+            let a_size = extract_size_from_path(&a_str).unwrap_or(0);
+            let b_size = extract_size_from_path(&b_str).unwrap_or(0);
+            b_size.cmp(&a_size)
+        });
+        return Some(candidates[0].clone());
+    }
+
+    None
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn find_icon_file(icon_name: &str) -> Option<std::path::PathBuf> {
+    let path = std::path::Path::new(icon_name);
+    if path.is_absolute() && path.is_file() {
+        return Some(path.to_path_buf());
+    }
+
+    let base_dirs = get_icon_base_dirs();
+    let active_theme = get_gtk_theme_name();
+
+    let mut themes = Vec::new();
+    if let Some(ref t) = active_theme {
+        themes.push(t.as_str());
+    }
+    if active_theme.as_deref() != Some("hicolor") {
+        themes.push("hicolor");
+    }
+
+    for theme in themes {
+        for base in &base_dirs {
+            let theme_dir = base.join(theme);
+            if theme_dir.is_dir() {
+                if let Some(resolved) = find_icon_file_in_theme(&theme_dir, icon_name) {
+                    return Some(resolved);
+                }
+            }
+        }
+    }
+
+    let pixmaps = std::path::Path::new("/usr/share/pixmaps");
+    if pixmaps.is_dir() {
+        let exact = pixmaps.join(format!("{}.png", icon_name));
+        if exact.is_file() {
+            return Some(exact);
+        }
+        let exact_lower = pixmaps.join(format!("{}.png", icon_name.to_lowercase()));
+        if exact_lower.is_file() {
+            return Some(exact_lower);
+        }
+
+        if let Ok(entries) = std::fs::read_dir(pixmaps) {
+            let target = format!("{}.png", icon_name.to_lowercase());
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        if name.to_lowercase() == target {
+                            return Some(path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(any(target_os = "linux", test))]
+pub fn resolve_linux_icon(app_key: &str) -> Option<String> {
+    let desktop_path = find_desktop_file(app_key)?;
+    let icon_name = get_icon_name_from_desktop(&desktop_path)?;
+    let icon_path = find_icon_file(&icon_name)?;
+    Some(icon_path.to_string_lossy().into_owned())
+}
+
+#[cfg(target_os = "linux")]
+fn load_png_rgba(path: &std::path::Path) -> Option<Rgba> {
+    let img = image::open(path).ok()?;
+    let img = img.to_rgba8();
+    let (width, height) = img.dimensions();
+    Some((width, height, img.into_raw()))
+}
+
+#[cfg(target_os = "linux")]
+pub fn extract_icon_rgba(path: &str) -> Option<Rgba> {
+    if path == "none" {
+        return None;
+    }
+    let p = std::path::Path::new(path);
+    if p.is_file() {
+        load_png_rgba(p)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_linux_icon_resolution_logic() {
+        let temp_dir = std::env::temp_dir().join("system_trace_test_icons");
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        let apps_dir = temp_dir.join("applications");
+        let hicolor_apps_dir = temp_dir.join("icons/hicolor/48x48/apps");
+        let pixmaps_dir = temp_dir.join("pixmaps");
+
+        fs::create_dir_all(&apps_dir).unwrap();
+        fs::create_dir_all(&hicolor_apps_dir).unwrap();
+        fs::create_dir_all(&pixmaps_dir).unwrap();
+
+        let desktop_file_path = apps_dir.join("mock-app.desktop");
+        let desktop_content =
+            "[Desktop Entry]\nName=Mock App\nExec=mock-app\nIcon=mock-icon-name\n";
+        fs::write(&desktop_file_path, desktop_content).unwrap();
+
+        let icon_png_path = hicolor_apps_dir.join("mock-icon-name.png");
+        fs::write(&icon_png_path, b"mock-png-data").unwrap();
+
+        let old_xdg_dirs = std::env::var("XDG_DATA_DIRS").ok();
+        let old_xdg_home = std::env::var("XDG_DATA_HOME").ok();
+        let old_home = std::env::var("HOME").ok();
+
+        std::env::set_var("XDG_DATA_DIRS", temp_dir.to_str().unwrap());
+        std::env::set_var("XDG_DATA_HOME", temp_dir.to_str().unwrap());
+        std::env::set_var("HOME", temp_dir.to_str().unwrap());
+
+        let resolved_desktop = find_desktop_file("mock-app");
+        assert_eq!(resolved_desktop, Some(desktop_file_path.clone()));
+
+        let icon_name = get_icon_name_from_desktop(&desktop_file_path);
+        assert_eq!(icon_name, Some("mock-icon-name".to_string()));
+
+        assert_eq!(
+            extract_size_from_path("/usr/share/icons/hicolor/128x128/apps/icon.png"),
+            Some(128)
+        );
+        assert_eq!(
+            extract_size_from_path("icons/hicolor/256/apps/icon.png"),
+            Some(256)
+        );
+        assert_eq!(extract_size_from_path("flat/icon.png"), None);
+
+        let resolved_icon = find_icon_file("mock-icon-name");
+        assert_eq!(resolved_icon, Some(icon_png_path));
+
+        let final_path = resolve_linux_icon("mock-app");
+        assert!(final_path.is_some());
+        assert!(final_path.unwrap().ends_with("mock-icon-name.png"));
+
+        if let Some(val) = old_xdg_dirs {
+            std::env::set_var("XDG_DATA_DIRS", val);
+        } else {
+            std::env::remove_var("XDG_DATA_DIRS");
+        }
+        if let Some(val) = old_xdg_home {
+            std::env::set_var("XDG_DATA_HOME", val);
+        } else {
+            std::env::remove_var("XDG_DATA_HOME");
+        }
+        if let Some(val) = old_home {
+            std::env::set_var("HOME", val);
+        } else {
+            std::env::remove_var("HOME");
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
 }
