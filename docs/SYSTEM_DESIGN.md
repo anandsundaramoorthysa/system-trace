@@ -292,9 +292,21 @@ capture toggle, retention, exclusions, export/import, wipe), plus Onboarding
   `app_limit`; when exceeded, emits `limit_reached` and applies the chosen
   strictness (notification, dismissible overlay, or a strict lockable block).
 - Blocker: focus mode. Leaning to the system hosts-file method for websites (works
-  across all browsers) plus app-level blocking by process; requires an elevated
-  helper. Designed as a separate service with a clear, auditable interface; off by
-  default.
+  across all browsers) plus app-level blocking by process. 
+  
+  **Linux Elevation Flow**:
+  - Updating `/etc/hosts` requires root privileges.
+  - The app uses `pkexec` (part of Polkit) to spawn a GUI password prompt and execute
+    `cp` to overwrite the hosts file with a managed temporary file.
+  - If `pkexec` is missing (exit code 127) or cancelled (exit code 126), the app
+    returns a clear error to the UI.
+  - **SELinux (Fedora/RHEL)**: If writes fail despite a successful prompt, check
+    `journalctl -t setroubleshoot`. The hosts path is standard, but policy
+    enforcement may vary.
+  - **Sudo Fallback**: Users without `pkexec` can manually apply changes:
+    `cat /tmp/system-trace-hosts | sudo tee /etc/hosts`.
+
+  Designed as a separate service with a clear, auditable interface; off by default.
 - Wellbeing scheduler: timers for eye/posture breaks (a dedicated always-on-top
   overlay window), and a quiet-hours/bedtime mode (reduced nudges; best-effort
   OS grayscale where allowed).

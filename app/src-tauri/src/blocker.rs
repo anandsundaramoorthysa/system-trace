@@ -86,8 +86,7 @@ pub fn apply(domains: &[String]) -> Result<usize, String> {
         next.push_str(END);
         next.push('\n');
     }
-    fs::write(&path, next)
-        .map_err(|e| format!("could not write hosts file (run as administrator): {e}"))?;
+    write_hosts(next)?;
     Ok(count)
 }
 
@@ -96,9 +95,48 @@ pub fn clear() -> Result<(), String> {
     let path = hosts_path();
     let current = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let next = strip_managed(&current);
-    fs::write(&path, next)
-        .map_err(|e| format!("could not write hosts file (run as administrator): {e}"))?;
+    write_hosts(next)?;
     Ok(())
+}
+
+fn write_hosts(content: String) -> Result<(), String> {
+    let path = hosts_path();
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        let temp_path = "/tmp/system-trace-hosts";
+        fs::write(temp_path, content).map_err(|e| format!("failed to write temporary file: {e}"))?;
+
+        let status = Command::new("pkexec")
+            .args(["cp", temp_path, path.to_str().unwrap()])
+            .status();
+
+        let _ = fs::remove_file(temp_path);
+
+        match status {
+            Ok(s) if s.success() => Ok(()),
+            Ok(s) => {
+                let code = s.code().unwrap_or(-1);
+                if code == 126 {
+                    Err("Elevation prompt was cancelled".to_string())
+                } else if code == 127 {
+                    Err("pkexec not found. Please install polkit or apply changes manually with sudo."
+                        .to_string())
+                } else {
+                    Err(format!("pkexec failed with exit code {code}"))
+                }
+            }
+            Err(e) => Err(format!("failed to launch pkexec: {e}")),
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        fs::write(&path, content)
+            .map_err(|e| format!("could not write hosts file (run as administrator): {e}"))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
