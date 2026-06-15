@@ -101,9 +101,8 @@ pub fn snapshot_encrypted(
     Ok(())
 }
 
-/// Keep at most one quarantined encrypted snapshot.
-/// Any previous `.enc.corrupt` file is removed before a new
-/// quarantine file is created.
+/// Remove a stale quarantined snapshot left behind from a
+/// previous recovery.
 pub fn prune_corrupt_snapshot(enc_path: &Path) -> DbResult<()> {
     let corrupt = enc_path.with_extension("enc.corrupt");
 
@@ -1982,7 +1981,7 @@ mod tests {
     }
 
     #[test]
-    fn prune_removes_existing_quarantine_before_replacement() {
+    fn prune_corrupt_snapshot_removes_stale_quarantine() {
         let base = std::env::temp_dir().join(format!("st-prune-test-{}", std::process::id()));
 
         let corrupt = base.with_extension("enc.corrupt");
@@ -1996,12 +1995,6 @@ mod tests {
         prune_corrupt_snapshot(&base).unwrap();
 
         assert!(!corrupt.exists());
-
-        std::fs::write(&corrupt, b"new").unwrap();
-
-        assert!(corrupt.exists());
-
-        let _ = std::fs::remove_file(&corrupt);
     }
 
     #[test]
