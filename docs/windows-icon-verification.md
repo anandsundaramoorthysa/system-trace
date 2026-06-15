@@ -64,3 +64,11 @@ Shows the clean fallback to colored letter avatars when icons cannot be extracte
 
 1. **UWP / Application Frame Host Collapsing**: Traditional UWP applications hosted under `ApplicationFrameHost.exe` are collapsed into a single generic "ApplicationFrameHost" key and display a generic icon.
 2. **First-Focus Lazy Path Load**: A newly discovered application will show a letter avatar until it is focused a second time (or active across a DB flush cycle) due to database insertion ordering.
+
+---
+
+## Related Issues
+
+- **Issue #24**: Verify Windows real app-icon extraction across app types (this verification target).
+- **Issue #35**: Addresses tracking of secondary container windows and window focus boundaries on Windows platforms.
+
