@@ -86,8 +86,7 @@ pub fn apply(domains: &[String]) -> Result<usize, String> {
         next.push_str(END);
         next.push('\n');
     }
-    fs::write(&path, next)
-        .map_err(|e| format!("could not write hosts file (run as administrator): {e}"))?;
+    write_hosts(next)?;
     Ok(count)
 }
 
@@ -96,9 +95,75 @@ pub fn clear() -> Result<(), String> {
     let path = hosts_path();
     let current = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let next = strip_managed(&current);
-    fs::write(&path, next)
-        .map_err(|e| format!("could not write hosts file (run as administrator): {e}"))?;
+    write_hosts(next)?;
     Ok(())
+}
+
+fn write_hosts(content: String) -> Result<(), String> {
+    let path = hosts_path();
+
+    #[cfg(target_os = "linux")]
+    {
+        use rand::RngCore;
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        use std::process::Command;
+
+        // Stage the new hosts content to a private, unpredictably-named temp
+        // file (mode 0600, created with O_EXCL) so a local user cannot
+        // pre-create, read, or swap it in before the privileged copy runs.
+        // Prefer the user-private XDG_RUNTIME_DIR over the world-writable /tmp.
+        let dir = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(std::env::temp_dir);
+        let mut rand_bytes = [0u8; 16];
+        rand::rngs::OsRng.fill_bytes(&mut rand_bytes);
+        let temp_path = dir.join(format!(
+            "system-trace-hosts-{:032x}",
+            u128::from_le_bytes(rand_bytes)
+        ));
+
+        {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&temp_path)
+                .map_err(|e| format!("failed to create temporary file: {e}"))?;
+            file.write_all(content.as_bytes())
+                .map_err(|e| format!("failed to write temporary file: {e}"))?;
+        }
+
+        let status = Command::new("pkexec")
+            .args(["cp", temp_path.to_str().unwrap(), path.to_str().unwrap()])
+            .status();
+
+        let _ = fs::remove_file(&temp_path);
+
+        match status {
+            Ok(s) if s.success() => Ok(()),
+            Ok(s) => {
+                let code = s.code().unwrap_or(-1);
+                if code == 126 {
+                    Err("Elevation prompt was cancelled".to_string())
+                } else if code == 127 {
+                    Err("pkexec not found. Please install polkit or apply changes manually with sudo."
+                        .to_string())
+                } else {
+                    Err(format!("pkexec failed with exit code {code}"))
+                }
+            }
+            Err(e) => Err(format!("failed to launch pkexec: {e}")),
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        fs::write(&path, content)
+            .map_err(|e| format!("could not write hosts file (run as administrator): {e}"))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
