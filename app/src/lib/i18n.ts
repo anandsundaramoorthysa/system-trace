@@ -38,6 +38,20 @@ const en: Catalog = {
   "state.idle": "Idle",
   "state.locked": "Locked",
   "state.paused": "Paused",
+  "dashboard.title": "Dashboard",
+  "dashboard.screen_time_today": "Screen Time Today",
+  "dashboard.vs_yesterday": "vs yesterday",
+  "dashboard.most_used": "Most Used",
+  "dashboard.no_usage": "No usage yet",
+  "dashboard.longest_session": "Longest Session",
+  "dashboard.focus_score": "Focus Score",
+  "dashboard.categorize_apps": "Categorize apps to score",
+  "dashboard.productive": "productive",
+  "dashboard.distracting": "distracting",
+  "dashboard.by_hour": "Today, by hour",
+  "dashboard.switches": "switches",
+  "dashboard.categories": "Categories",
+  "dashboard.top_apps": "Top apps",
 };
 
 const CATALOGS: Record<string, Catalog> = { en };
