@@ -52,6 +52,20 @@ const en: Catalog = {
   "dashboard.switches": "switches",
   "dashboard.categories": "Categories",
   "dashboard.top_apps": "Top apps",
+  "apps.search_history": "Search history",
+  "apps.search_placeholder": "Find when you used an app, e.g. Slack",
+  "apps.search_aria": "Search your usage history",
+  "apps.search_button": "Search",
+  "apps.loading": "Loading apps",
+  "apps.searching": "Searching",
+  "apps.no_results": "No matching usage found.",
+  "apps.list_title": "Apps",
+  "apps.filter_placeholder": "Filter apps",
+  "apps.filter_aria": "Filter the app list",
+  "apps.no_apps_title": "No apps to show",
+  "apps.no_apps_desc": "Apps you use are listed here once tracking has data.",
+  "apps.category_uncategorized": "Uncategorized",
+  "apps.category_aria": "Category for",
 };
 
 const CATALOGS: Record<string, Catalog> = { en };
