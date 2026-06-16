@@ -100,6 +100,20 @@ const en: Catalog = {
   "focus.apply_now": "Apply now",
   "focus.clear_now": "Clear now",
   "focus.block_desc": "App rules nudge you when a blocked app is in front during focus mode. System-wide website blocking edits the hosts file (requires running System Trace as administrator) and now follows each rule's schedule automatically - blocks apply when a window opens and clear when it ends. The buttons above just force an immediate sync; a \"Clear now\" will re-apply within seconds if a rule is still enabled and in its active window.",
+  "onboarding.step_indicator": "Step {current} of {total}",
+  "onboarding.step1_title": "Welcome to System Trace",
+  "onboarding.step1_body": "A calm screen-time tracker for your desktop. It records the app and window you are using, detects idle time, and turns it into clear dashboards and reports - so you can understand where your time goes without guesswork.",
+  "onboarding.step2_title": "Private by default",
+  "onboarding.step2_body": "Everything stays on this device. There is no cloud, no account, and no telemetry. Your data lives in a local SQLite database you can export, wipe, or exclude apps from at any time. Window-title capture is off by default - you can turn it on in Settings if you want.",
+  "onboarding.step3_title": "Made for grown-ups",
+  "onboarding.step3_body": "Limits, focus mode, and break reminders are here when you want them - quiet when you don't. Categories are neutral by default; turn on productivity scoring in Settings if you want a Focus Score. You can pause tracking at any moment from the top bar.",
+  "onboarding.step4_title": "Always on, quietly",
+  "onboarding.step4_body": "System Trace works best when it runs in the background. With your permission, it will start when you sign in to your computer and live in the system tray. Closing the window keeps it tracking; only quitting from the tray menu stops it. You can change this any time in Settings.",
+  "onboarding.run_at_login": "Run System Trace when I sign in to my computer",
+  "onboarding.recommended": "(recommended)",
+  "onboarding.skip": "Skip",
+  "onboarding.next": "Next",
+  "onboarding.get_started": "Get started",
 };
 
 const CATALOGS: Record<string, Catalog> = { en };
