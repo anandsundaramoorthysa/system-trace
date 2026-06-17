@@ -9,6 +9,7 @@ import {
   Timer,
   FileDown,
 } from "lucide-react";
+import { t } from "../lib/i18n";
 import { getDayOverview, getRangeOverview } from "../lib/api";
 import { downloadReportPdf } from "../lib/pdf";
 import { useAsync } from "../lib/useAsync";
@@ -76,9 +77,9 @@ function DayBars({ data }: { data: DayTotal[] }) {
 function DayView({ anchor }: { anchor: string }) {
   const { data, loading, error } = useAsync(() => getDayOverview(anchor), [anchor]);
 
-  if (loading && !data) return <Spinner label="Loading day" />;
+  if (loading && !data) return <Spinner label={t("reports.loading_day", "Loading day")} />;
   if (error && !data)
-    return <p className="text-body text-negative">Could not load: {error}</p>;
+    return <p className="text-body text-negative">{t("reports.error_load", `Could not load: ${error}`)}</p>;
   if (!data) return null;
 
   if (data.total_ms === 0) {
@@ -86,8 +87,8 @@ function DayView({ anchor }: { anchor: string }) {
       <Card className="p-8">
         <EmptyState
           icon={<CalendarDays className="h-7 w-7" />}
-          title="No activity on this day"
-          description="Either nothing was tracked, or the day is older than the raw-event retention window."
+          title={t("reports.no_activity_title", "No activity on this day")}
+          description={t("reports.no_activity_desc", "Either nothing was tracked, or the day is older than the raw-event retention window.")}
         />
       </Card>
     );
@@ -101,40 +102,40 @@ function DayView({ anchor }: { anchor: string }) {
         <Card className="p-5 lg:col-span-2">
           <div className="flex items-center gap-2 text-text-muted">
             <Clock className="h-4 w-4" aria-hidden />
-            <span className="text-label uppercase tracking-wide">Screen Time</span>
+            <span className="text-label uppercase tracking-wide">{t("reports.screen_time", "Screen Time")}</span>
           </div>
           <div className="mt-2 text-display text-text">{formatDuration(data.total_ms)}</div>
           <div className="mt-1 text-body text-text-muted">
-            {formatDelta(data.delta_vs_yesterday_ms)} vs the day before
+            {formatDelta(data.delta_vs_yesterday_ms)} {t("reports.vs_prev", "${formatDelta(data.delta_vs_yesterday_ms)} vs the day before")}
           </div>
         </Card>
         <StatCard
           icon={<AppWindow className="h-4 w-4" />}
-          label="Most Used"
+          label={t("reports.most_used", "Most Used")}
           value={mostUsed ? mostUsed.display_name : "-"}
-          hint={mostUsed ? formatDuration(mostUsed.total_ms) : "No usage"}
+          hint={mostUsed ? formatDuration(mostUsed.total_ms) : t("reports.no_usage", "No usage")}
         />
         <StatCard
           icon={<Timer className="h-4 w-4" />}
-          label="Longest Session"
+          label={t("reports.longest_session", "Longest Session")}
           value={formatDuration(data.longest_session_ms)}
-          hint={data.longest_session_app ?? "No usage"}
+          hint={data.longest_session_app ?? t("reports.no_usage", "No usage")}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
-            <CardTitle>By hour</CardTitle>
+            <CardTitle>{t("reports.by_hour", "By hour")}</CardTitle>
             <span className="flex items-center gap-1.5 text-label text-text-muted">
-              <Repeat className="h-3.5 w-3.5" aria-hidden /> {data.app_switches} switches
+              <Repeat className="h-3.5 w-3.5" aria-hidden />{t("reports.switches", "${data.app_switches} switches")}
             </span>
           </div>
           <HourChart data={data.by_hour} />
         </Card>
         <Card className="p-5">
           <div className="mb-3">
-            <CardTitle>Categories</CardTitle>
+            <CardTitle>{t("reports.categories", "Categories")}</CardTitle>
           </div>
           <CategoryDonut data={data.by_category} />
         </Card>
@@ -142,7 +143,7 @@ function DayView({ anchor }: { anchor: string }) {
 
       <Card className="p-5">
         <div className="mb-4">
-          <CardTitle>Top apps</CardTitle>
+          <CardTitle>{t("reports.top_apps", "Top apps")}</CardTitle>
         </div>
         <TopApps data={data.top_apps} />
       </Card>
@@ -155,9 +156,9 @@ function DayView({ anchor }: { anchor: string }) {
 function RangeView({ from, to }: { from: string; to: string }) {
   const { data, loading, error } = useAsync(() => getRangeOverview(from, to), [from, to]);
 
-  if (loading && !data) return <Spinner label="Loading range" />;
+  if (loading && !data) return <Spinner label={t("reports.loading_range", "Loading range")} />;
   if (error && !data)
-    return <p className="text-body text-negative">Could not load: {error}</p>;
+    return <p className="text-body text-negative">{t("reports.error_load", `Could not load: ${error}`)}</p>;
   if (!data) return null;
 
   return (
@@ -165,31 +166,31 @@ function RangeView({ from, to }: { from: string; to: string }) {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
           icon={<Clock className="h-4 w-4" />}
-          label="Total"
+          label={t("reports.total", "Total")}
           value={formatDuration(data.total_ms)}
           hint={`${formatDelta(data.total_ms - data.prev_total_ms)} vs previous`}
           hintTone="muted"
         />
         <StatCard
           icon={<TrendingUp className="h-4 w-4" />}
-          label="Daily Average"
+          label={t("reports.daily_avg", "Daily Average")}
           value={formatDuration(data.daily_average_ms)}
         />
         <StatCard
           icon={<Flame className="h-4 w-4" />}
-          label="Busiest Day"
+          label={t("reports.busiest_day", "Busiest Day")}
           value={data.busiest_day ? formatDayLabel(data.busiest_day) : "-"}
         />
         <StatCard
           icon={<CalendarDays className="h-4 w-4" />}
-          label="Days Tracked"
+          label={t("reports.days_tracked", "Days tracked")}
           value={String(data.by_day.filter((d) => d.total_ms > 0).length)}
         />
       </div>
 
       <Card className="p-5">
         <div className="mb-4">
-          <CardTitle>Daily usage</CardTitle>
+          <CardTitle>{t("reports.daily_usage", "Daily usage")}</CardTitle>
         </div>
         <DayBars data={data.by_day} />
       </Card>
@@ -197,13 +198,13 @@ function RangeView({ from, to }: { from: string; to: string }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="p-5">
           <div className="mb-4">
-            <CardTitle>Top apps</CardTitle>
+            <CardTitle>{t("reports.top_apps", "Top apps")}</CardTitle>
           </div>
           <TopApps data={data.top_apps} />
         </Card>
         <Card className="p-5">
           <div className="mb-4">
-            <CardTitle>Categories</CardTitle>
+            <CardTitle>{t("reports.categories", "Categories")}</CardTitle>
           </div>
           <CategoryDonut data={data.by_category} />
         </Card>
@@ -235,7 +236,7 @@ export function Reports() {
         rangeTo: anchor,
         atPresent: anchor === today,
         label: formatLongDay(anchor),
-        resetLabel: "Today",
+        resetLabel: t("reports.today", "Today"),
       };
     }
     if (mode === "week") {
@@ -246,7 +247,7 @@ export function Reports() {
         rangeTo: end,
         atPresent: start === startOfWeek(today),
         label: formatWeekLabel(start),
-        resetLabel: "This week",
+        resetLabel: t("reports.this_week", "This week"),
       };
     }
     const start = startOfMonth(anchor);
@@ -257,7 +258,7 @@ export function Reports() {
       rangeTo: end,
       atPresent: start === startOfMonth(today),
       label: formatMonthLabel(start),
-      resetLabel: "This month",
+      resetLabel: t("reports.this_month", "This month"),
     };
   }, [mode, anchor, today]);
 
@@ -297,12 +298,12 @@ export function Reports() {
   async function downloadPdf() {
     if (pdfBusy) return;
     setPdfBusy(true);
-    setPdfMsg("Building PDF...");
+    setPdfMsg(t("reports.building_pdf", "Building PDF..."));
     try {
       const msg = await downloadReportPdf({ mode, from: rangeFrom, to: rangeTo, label });
       setPdfMsg(msg || null);
     } catch (e) {
-      setPdfMsg(`Could not export: ${e instanceof Error ? e.message : String(e)}`);
+      setPdfMsg(t("reports.export_error",`Could not export: ${e instanceof Error ? e.message : String(e)}`));
     } finally {
       setPdfBusy(false);
       window.setTimeout(() => setPdfMsg(null), 4000);
@@ -322,14 +323,14 @@ export function Reports() {
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <CardTitle>Overview</CardTitle>
+          <CardTitle>{t("reports.overview", "Overview")}</CardTitle>
           <Segmented<Mode>
             value={mode}
             onChange={setMode}
             options={[
-              { value: "day", label: "Day" },
-              { value: "week", label: "Week" },
-              { value: "month", label: "Month" },
+              { value: "day", label: t("reports.day", "Day") },
+              { value: "week", label: t("reports.week", "Week") },
+              { value: "month", label: t("reports.month", "Month") },
             ]}
           />
         </div>
@@ -340,7 +341,7 @@ export function Reports() {
             disabled={pdfBusy}
             className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2 disabled:opacity-60"
           >
-            <FileDown className="h-4 w-4" aria-hidden /> {pdfBusy ? "Exporting..." : "PDF"}
+            <FileDown className="h-4 w-4" aria-hidden /> {pdfBusy ? t("reports.exporting", "Exporting...") : t("reports.pdf", "PDF")}
           </button>
           <DateStepper
             label={label}

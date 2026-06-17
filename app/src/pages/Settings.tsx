@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Keyboard,
 } from "lucide-react";
+import { t } from "../lib/i18n";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import {
   addExclusion,
@@ -262,25 +263,25 @@ export function Settings() {
         </div>
       ) : null}
 
-      <Section title="Appearance">
+      <Section title={t("settings.appearance", "Appearance")}>
         <Row
-          title="Theme"
-          description="System follows your OS setting."
+          title={t("settings.theme", "Theme")}
+          description={t("settings.theme_desc", "System follows your OS setting.")}
           control={
             <Segmented<ThemePreference>
               value={s.theme}
               onChange={chooseTheme}
               options={[
-                { value: "system", label: "System" },
-                { value: "light", label: "Light" },
-                { value: "dark", label: "Dark" },
+               { value: "system", label: t("settings.theme_system", "System") },
+               { value: "light", label: t("settings.theme_light", "Light") },
+               { value: "dark", label: t("settings.theme_dark", "Dark") },
               ]}
             />
           }
         />
         <Row
-          title="Accent palette"
-          description="The highlight color used across charts and buttons."
+          title={t("settings.palette", "Accent palette")}
+          description={t("settings.palette_desc", "The highlight color used across charts and buttons.")}
           control={
             <div className="flex gap-1.5" role="group" aria-label="Accent palette">
               {PALETTES.map((p) => (
@@ -306,8 +307,8 @@ export function Settings() {
           }
         />
         <Row
-          title="Language"
-          description="More languages are community-contributed."
+          title={t("settings.language", "Language")}
+          description={t("settings.language_desc", "More languages are community-contributed.")}
           control={
             <select
               value={s.language}
@@ -328,10 +329,10 @@ export function Settings() {
         />
       </Section>
 
-      <Section title="Tracking">
+      <Section title={t("settings.tracking", "Tracking")}>
         <Row
-          title="Idle threshold"
-          description="Seconds of no input before time stops counting."
+          title={t("settings.idle_threshold", "Idle threshold")}
+          description={t("settings.idle_desc", "Seconds of no input before time stops counting.")}
           control={
             <input
               type="number"
@@ -344,29 +345,29 @@ export function Settings() {
           }
         />
         <Row
-          title="Capture window titles"
-          description="Off by default for privacy. Titles can contain private text."
+          title={t("settings.capture_titles", "Capture window titles")}
+          description={t("settings.capture_desc", "Off by default for privacy. Titles can contain private text.")}
           control={
             <Toggle checked={s.capture_titles} onChange={(v) => setBool("capture_titles", v)} />
           }
         />
         <Row
-          title="Productivity scoring"
-          description="Optional. Adds a Focus Score and productive/distracting labels."
+          title={t("settings.productivity", "Productivity scoring")}
+          description={t("settings.productivity_desc", "Optional. Adds a Focus Score and productive/distracting labels.")}
           control={
             <Toggle checked={s.scoring_enabled} onChange={(v) => setBool("scoring_enabled", v)} />
           }
         />
         <Row
-          title="Summary notifications"
-          description="A recap of your screen time: off, daily, weekly, or both. Catches up if the app was closed."
+          title={t("settings.notifications", "Summary notifications")}
+          description={t("settings.notifications_desc", "A recap of your screen time: off, daily, weekly, or both. Catches up if the app was closed.")}
           control={
             <Segmented<SummaryCadence>
               options={[
-                { value: "off", label: "Off" },
-                { value: "daily", label: "Daily" },
-                { value: "weekly", label: "Weekly" },
-                { value: "both", label: "Both" },
+                { value: "off", label:t("settings.off", "Off") },
+                { value: "daily", label: t("settings.daily", "Daily") },
+                { value: "weekly", label: t("settings.weekly", "Weekly") },
+                { value: "both", label: t("settings.both", "Both") },
               ]}
               value={s.summary_cadence}
               onChange={(v) => setStr("summary_cadence", v)}
@@ -375,25 +376,25 @@ export function Settings() {
         />
       </Section>
 
-      <Section title="Startup">
+      <Section title={t("settings.startup", "Startup")}>
         <Row
-          title="Launch at login"
+          title={t("settings.launch_at_login", "Launch at login")}
           control={
             <Toggle checked={s.launch_at_login} onChange={(v) => setBool("launch_at_login", v)} />
           }
         />
         <Row
-          title="Start minimized to tray"
+          title={t("settings.start_minimized", "Start minimized to tray")}
           control={
             <Toggle checked={s.start_minimized} onChange={(v) => setBool("start_minimized", v)} />
           }
         />
       </Section>
 
-      <Section title="Privacy and data">
+      <Section title={t("settings.privacy","Privacy and data")}>
         <Row
-          title="Keep raw events for"
-          description="Daily summaries are kept forever; raw events older than this are trimmed."
+          title={t("settings.retention", "Keep raw events for")}
+          description={t("settings.retention_desc", "Daily summaries are kept forever; raw events older than this are trimmed.")}
           control={
             <div className="flex items-center gap-2">
               <input
@@ -404,15 +405,15 @@ export function Settings() {
                 onChange={(e) => setNum("retention_days", Number(e.target.value))}
                 className="w-24 rounded-md border border-border bg-bg px-2 py-1.5 text-body text-text"
               />
-              <span className="text-body text-text-muted">days</span>
+              <span className="text-body text-text-muted">{t("settings.days", "days")}</span>
             </div>
           }
         />
 
         <div className="px-5 py-3.5">
-          <div className="text-body-strong text-text">Exclusions</div>
+          <div className="text-body-strong text-text">{t("settings.exclusions", "Exclusions")}</div>
           <div className="text-label text-text-muted">
-            Apps or window titles that are never tracked.
+            {t("settings.exclusions_desc", "Apps or window titles that are never tracked.")}
           </div>
           <div className="mt-3 flex gap-2">
             <select
@@ -420,8 +421,8 @@ export function Settings() {
               onChange={(e) => setMatchType(e.target.value as ExclusionMatchType)}
               className="rounded-md border border-border bg-bg px-2 py-1.5 text-body text-text"
             >
-              <option value="app">App is</option>
-              <option value="title_contains">Title contains</option>
+              <option value="app">{t("settings.app_is", "App is")}</option>
+              <option value="title_contains">{t("settings.title_contains", "Title contains")}</option>
             </select>
             <input
               value={pattern}
@@ -434,7 +435,7 @@ export function Settings() {
               onClick={addEx}
               className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-body-strong text-white"
             >
-              <Plus className="h-4 w-4" aria-hidden /> Add
+              <Plus className="h-4 w-4" aria-hidden /> {t("settings.add", "Add")}
             </button>
           </div>
           {exclusions.length > 0 ? (
@@ -465,13 +466,13 @@ export function Settings() {
         </div>
 
         <div className="px-5 py-3.5">
-          <div className="text-body-strong text-text">Export your data</div>
+          <div className="text-body-strong text-text">{t("settings.export", "Export your data")}</div>
           <div className="text-label text-text-muted">
-            A copy of your events. Leave the dates empty to export everything.
+           {t("settings.export_desc", "A copy of your events. Leave the dates empty to export everything.")}
           </div>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-label text-text-muted">From</span>
+              <span className="text-label text-text-muted">{t("settings.from", "From")}</span>
               <input
                 type="date"
                 value={exportFrom}
@@ -480,7 +481,7 @@ export function Settings() {
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-label text-text-muted">To</span>
+              <span className="text-label text-text-muted">{t("settings.to", "To")}</span>
               <input
                 type="date"
                 value={exportTo}
@@ -493,33 +494,33 @@ export function Settings() {
               onClick={() => doExport("csv")}
               className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2"
             >
-              <Download className="h-4 w-4" aria-hidden /> CSV
+              <Download className="h-4 w-4" aria-hidden /> {t("settings.csv", "CSV")}
             </button>
             <button
               type="button"
               onClick={() => doExport("json")}
               className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2"
             >
-              <Download className="h-4 w-4" aria-hidden /> JSON
+              <Download className="h-4 w-4" aria-hidden /> {t("settings.json", "JSON")}
             </button>
           </div>
         </div>
         <Row
-          title="Import data"
-          description="Merge a JSON export from another computer."
+          title={t("settings.import", "Import data")}
+          description={t("settings.import_desc", "Merge a JSON export from another computer.")}
           control={
             <button
               type="button"
               onClick={doImport}
               className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2"
             >
-              <Upload className="h-4 w-4" aria-hidden /> Import
+              <Upload className="h-4 w-4" aria-hidden /> {t("settings.import_btn", "Import")}
             </button>
           }
         />
         <Row
-          title="Backup and restore"
-          description="A full snapshot of your local database. Restore replaces current data."
+          title={t("settings.backup_restore", "Backup and restore")}
+          description={t("settings.backup_restore_desc", "A full snapshot of your local database. Restore replaces current data.")}
           control={
             <div className="flex gap-2">
               <button
@@ -527,27 +528,27 @@ export function Settings() {
                 onClick={doBackup}
                 className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2"
               >
-                <Save className="h-4 w-4" aria-hidden /> Backup
+                <Save className="h-4 w-4" aria-hidden />{t("settings.backup", "Backup")}
               </button>
               <button
                 type="button"
                 onClick={doRestore}
                 className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2"
               >
-                <RotateCcw className="h-4 w-4" aria-hidden /> Restore
+                <RotateCcw className="h-4 w-4" aria-hidden /> {t("settings.restore", "Restore")}
               </button>
             </div>
           }
         />
       </Section>
 
-      <Section title="Updates and shortcuts">
+      <Section title={t("settings.updates","Updates and shortcuts")}>
         <Row
-          title="Pause / resume hotkey"
+          title={t("settings.hotkey", "Pause / resume hotkey")}
           description={
             hotkeyOk
-              ? "Toggle tracking from anywhere with this global shortcut."
-              : "Another app is already using this shortcut, so it is unavailable. You can still pause from the top bar."
+              ? t("settings.hotkey_desc_ok","Toggle tracking from anywhere with this global shortcut.")
+              : t("settings.hotkey_desc_fail","Another app is already using this shortcut, so it is unavailable. You can still pause from the top bar.")
           }
           control={
             <span
@@ -558,13 +559,13 @@ export function Settings() {
                   : "border-negative/50 bg-negative/10 text-negative line-through",
               )}
             >
-              <Keyboard className="h-4 w-4" aria-hidden /> Ctrl + Alt + P
+              <Keyboard className="h-4 w-4" aria-hidden /> {t("settings.hotkey_label", "Ctrl + Alt + P")}
             </span>
           }
         />
         <Row
-          title="Check for updates"
-          description="Asks GitHub for the latest version. Nothing is sent."
+          title={t("settings.check_update", "Check for updates")}
+          description={t("settings.check_desc","Asks GitHub for the latest version. Nothing is sent.")}
           control={
             <button
               type="button"
@@ -579,16 +580,16 @@ export function Settings() {
                 className={cx("h-4 w-4", checking && "animate-spin")}
                 aria-hidden
               />{" "}
-              {checking ? "Checking..." : "Check"}
+              {checking ? t("settings.checking", "Checking...") : t("settings.check", "Check")}
             </button>
           }
         />
       </Section>
 
-      <Section title="Danger zone">
+      <Section title={t("settings.danger", "Danger zone")}>
         <Row
-          title="Delete all data"
-          description="Permanently remove every event, app, and exclusion."
+          title={t("settings.delete_all", "Delete all data")}
+          description={t("settings.delete_desc","Permanently remove every event, app, and exclusion.")}
           control={
             <button
               type="button"
@@ -598,7 +599,7 @@ export function Settings() {
                 "hover:bg-negative/10",
               )}
             >
-              <AlertTriangle className="h-4 w-4" aria-hidden /> Delete everything
+              <AlertTriangle className="h-4 w-4" aria-hidden />{t("settings.delete_btn", "Delete everything")}
             </button>
           }
         />
