@@ -371,6 +371,7 @@ pub fn get_hotkey_status(state: State<AppState>) -> R<bool> {
 pub fn focus_main_window(app: tauri::AppHandle) -> R<()> {
     use tauri::Manager;
     if let Some(w) = app.get_webview_window("main") {
+        crate::platform::position_window_on_active_monitor(&w);
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();

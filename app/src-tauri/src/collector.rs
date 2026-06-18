@@ -557,6 +557,7 @@ mod runtime {
                             .show();
                         // Bring the window forward so the overlay is seen.
                         if let Some(w) = app.get_webview_window("main") {
+                            crate::platform::position_window_on_active_monitor(&w);
                             let _ = w.unminimize();
                             let _ = w.show();
                             let _ = w.set_focus();
@@ -714,6 +715,7 @@ mod runtime {
                                 // even when minimized to the tray.
                                 if strict {
                                     if let Some(w) = app.get_webview_window("main") {
+                                        crate::platform::position_window_on_active_monitor(&w);
                                         let _ = w.unminimize();
                                         let _ = w.show();
                                         let _ = w.set_focus();

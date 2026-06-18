@@ -73,6 +73,7 @@ pub fn run() {
         // existing window instead of starting a new collector.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(w) = app.get_webview_window("main") {
+                crate::platform::position_window_on_active_monitor(&w);
                 let _ = w.show();
                 let _ = w.set_focus();
             }
@@ -290,6 +291,7 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "show" => {
                         if let Some(w) = app.get_webview_window("main") {
+                            crate::platform::position_window_on_active_monitor(&w);
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
