@@ -68,12 +68,11 @@ pub fn make_watcher() -> Box<dyn Watcher> {
 /// Reposition the window on the active monitor that currently has focus or holds the cursor.
 #[cfg(target_os = "windows")]
 pub fn position_window_on_active_monitor(window: &tauri::WebviewWindow) {
-    use ::windows::Win32::Graphics::Gdi::{
-        GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITOR_DEFAULTTONEAREST,
-        MONITORINFO,
-    };
-    use ::windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetCursorPos};
     use ::windows::Win32::Foundation::POINT;
+    use ::windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use ::windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetForegroundWindow};
 
     unsafe {
         let mut hmonitor = None;
@@ -116,7 +115,8 @@ pub fn position_window_on_active_monitor(window: &tauri::WebviewWindow) {
                     let x = rect.left + (monitor_width - win_width) / 2;
                     let y = rect.top + (monitor_height - win_height) / 2;
 
-                    let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+                    let _ = window
+                        .set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
                 }
             }
         }
@@ -128,4 +128,3 @@ pub fn position_window_on_active_monitor(window: &tauri::WebviewWindow) {
 pub fn position_window_on_active_monitor(_window: &tauri::WebviewWindow) {
     // Non-windows fallback is a no-op (the window will just open on its default monitor)
 }
-
