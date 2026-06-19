@@ -64,3 +64,67 @@ pub use linux::LinuxWatcher as PlatformWatcher;
 pub fn make_watcher() -> Box<dyn Watcher> {
     Box::new(PlatformWatcher::new())
 }
+
+/// Reposition the window on the active monitor that currently has focus or holds the cursor.
+#[cfg(target_os = "windows")]
+pub fn position_window_on_active_monitor(window: &tauri::WebviewWindow) {
+    use ::windows::Win32::Foundation::POINT;
+    use ::windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use ::windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetForegroundWindow};
+
+    unsafe {
+        let mut hmonitor = None;
+
+        // 1. Try to get monitor from the foreground window
+        let hwnd = GetForegroundWindow();
+        if !hwnd.0.is_null() {
+            let hm = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            if !hm.0.is_null() {
+                hmonitor = Some(hm);
+            }
+        }
+
+        // 2. If that failed, try to get monitor from the cursor position
+        if hmonitor.is_none() {
+            let mut pt = POINT::default();
+            if GetCursorPos(&mut pt).is_ok() {
+                let hm = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+                if !hm.0.is_null() {
+                    hmonitor = Some(hm);
+                }
+            }
+        }
+
+        // 3. If we have a monitor, get its working area and center our window on it
+        if let Some(hm) = hmonitor {
+            let mut info = MONITORINFO {
+                cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                ..Default::default()
+            };
+            if GetMonitorInfoW(hm, &mut info).as_bool() {
+                let rect = info.rcWork;
+                let monitor_width = rect.right - rect.left;
+                let monitor_height = rect.bottom - rect.top;
+
+                if let Ok(size) = window.outer_size() {
+                    let win_width = size.width as i32;
+                    let win_height = size.height as i32;
+
+                    let x = rect.left + (monitor_width - win_width) / 2;
+                    let y = rect.top + (monitor_height - win_height) / 2;
+
+                    let _ = window
+                        .set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+                }
+            }
+        }
+    }
+}
+
+/// Fallback for non-Windows platforms
+#[cfg(not(target_os = "windows"))]
+pub fn position_window_on_active_monitor(_window: &tauri::WebviewWindow) {
+    // Non-windows fallback is a no-op (the window will just open on its default monitor)
+}
