@@ -307,6 +307,7 @@ impl Watcher for MacWatcher {
             app_key,
             title,
             app_path,
+            pid: None,
         })
     }
 

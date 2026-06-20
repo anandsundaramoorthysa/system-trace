@@ -417,6 +417,8 @@ pub enum LimitStrictness {
     Medium,
     /// A strong, repeated nudge (a hard OS block is a later, elevated feature).
     Strict,
+    /// Terminate the process (hard enforcement).
+    Hard,
 }
 
 /// Argument for `set_limit`.

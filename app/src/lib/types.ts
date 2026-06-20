@@ -409,7 +409,7 @@ export interface WipeResult {
  * ------------------------------------------------------------------ */
 
 /** How strict a per-app daily limit is when reached. */
-export type LimitStrictness = "soft" | "medium" | "strict";
+export type LimitStrictness = "soft" | "medium" | "strict" | "hard";
 
 /** Argument for `set_limit`. */
 export interface LimitInput {

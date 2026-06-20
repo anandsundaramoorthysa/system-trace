@@ -82,6 +82,7 @@ impl Watcher for WinWatcher {
                 app_name,
                 title,
                 app_path: Some(app_path),
+                pid: Some(pid),
             })
         }
     }
@@ -189,4 +190,47 @@ unsafe fn process_name(pid: u32) -> Option<(String, String, String)> {
         .unwrap_or_else(|| file_name.clone());
 
     Some((file_name.to_lowercase(), stem, full))
+}
+
+pub struct WinTerminator;
+
+impl WinTerminator {
+    pub fn new() -> Self {
+        WinTerminator
+    }
+}
+
+impl super::ProcessTerminator for WinTerminator {
+    fn terminate_process(&self, pid: u32) -> Result<(), super::TerminateError> {
+        use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+        use windows::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER};
+
+        unsafe {
+            let handle = match OpenProcess(PROCESS_TERMINATE, false, pid) {
+                Ok(h) => h,
+                Err(e) => {
+                    let code = e.code();
+                    if code == ERROR_ACCESS_DENIED.to_hresult() {
+                        return Err(super::TerminateError::PermissionDenied);
+                    } else if code == ERROR_INVALID_PARAMETER.to_hresult() {
+                        return Err(super::TerminateError::NoSuchProcess);
+                    } else {
+                        return Err(super::TerminateError::Other(e.to_string()));
+                    }
+                }
+            };
+
+            let res = TerminateProcess(handle, 1);
+            let _ = CloseHandle(handle);
+
+            res.map_err(|e| {
+                let code = e.code();
+                if code == ERROR_ACCESS_DENIED.to_hresult() {
+                    super::TerminateError::PermissionDenied
+                } else {
+                    super::TerminateError::Other(e.to_string())
+                }
+            })
+        }
+    }
 }

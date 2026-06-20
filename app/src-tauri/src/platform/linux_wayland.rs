@@ -56,6 +56,7 @@ impl WaylandWindowFetcher for DbusWaylandWindowFetcher {
                                     app_key,
                                     title: info.title,
                                     app_path: None,
+                                    pid: None,
                                 });
                             }
                         }
@@ -80,6 +81,7 @@ impl WaylandWindowFetcher for DbusWaylandWindowFetcher {
                                         app_key,
                                         title: info.title,
                                         app_path: None,
+                                        pid: None,
                                     });
                                 }
                             }
@@ -112,6 +114,7 @@ impl ActiveWindowReceiver {
                 app_key,
                 title: if title.is_empty() { None } else { Some(title) },
                 app_path: None,
+                pid: None,
             });
         }
     }
@@ -332,6 +335,7 @@ mod tests {
                 app_name: "Firefox".to_string(),
                 title: Some("GitHub".to_string()),
                 app_path: None,
+                pid: None,
             }),
         });
 
