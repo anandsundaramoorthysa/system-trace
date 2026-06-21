@@ -166,9 +166,18 @@ impl PlatformTerminator {
 }
 
 #[cfg(not(target_os = "windows"))]
+impl Default for PlatformTerminator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
 impl ProcessTerminator for PlatformTerminator {
     fn terminate_process(&self, _pid: u32) -> Result<(), TerminateError> {
-        Err(TerminateError::Other("Not implemented on this platform".to_string()))
+        Err(TerminateError::Other(
+            "Not implemented on this platform".to_string(),
+        ))
     }
 }
 

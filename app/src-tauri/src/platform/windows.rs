@@ -200,10 +200,18 @@ impl WinTerminator {
     }
 }
 
+impl Default for WinTerminator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl super::ProcessTerminator for WinTerminator {
     fn terminate_process(&self, pid: u32) -> Result<(), super::TerminateError> {
+        use windows::Win32::Foundation::{
+            CloseHandle, ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER,
+        };
         use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
-        use windows::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER};
 
         unsafe {
             let handle = match OpenProcess(PROCESS_TERMINATE, false, pid) {

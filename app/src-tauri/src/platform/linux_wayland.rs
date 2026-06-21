@@ -127,6 +127,12 @@ pub struct WaylandWatcher {
     capture_titles: bool,
 }
 
+impl Default for WaylandWatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WaylandWatcher {
     pub fn new() -> Self {
         let desktop = std::env::var("XDG_CURRENT_DESKTOP")

@@ -992,11 +992,11 @@ mod tests {
 
     #[test]
     fn test_enforce_hard_limit_scenarios() {
+        use super::runtime::enforce_hard_limit;
+        use crate::models::{LimitStrictness, LimitView};
+        use crate::platform::TerminateError;
         use std::collections::HashSet;
         use std::sync::{Arc, Mutex};
-        use crate::models::{LimitView, LimitStrictness};
-        use crate::platform::TerminateError;
-        use super::runtime::enforce_hard_limit;
 
         struct MockTerminator {
             terminated_pids: Arc<Mutex<Vec<u32>>>,
@@ -1056,8 +1056,16 @@ mod tests {
         };
 
         // Scenario 1: Mismatch or no active window -> None, no termination
-        assert!(enforce_hard_limit(&l_exceeded_soft, None, &mut failed, &mock_terminator).is_none());
-        assert!(enforce_hard_limit(&l_not_exceeded, Some(&win("chrome", None)), &mut failed, &mock_terminator).is_none());
+        assert!(
+            enforce_hard_limit(&l_exceeded_soft, None, &mut failed, &mock_terminator).is_none()
+        );
+        assert!(enforce_hard_limit(
+            &l_not_exceeded,
+            Some(&win("chrome", None)),
+            &mut failed,
+            &mock_terminator
+        )
+        .is_none());
 
         let active_mismatch = ActiveWindow {
             app_key: "firefox.exe".to_string(),
@@ -1066,7 +1074,13 @@ mod tests {
             app_path: None,
             pid: Some(123),
         };
-        assert!(enforce_hard_limit(&l_exceeded_hard, Some(&active_mismatch), &mut failed, &mock_terminator).is_none());
+        assert!(enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_mismatch),
+            &mut failed,
+            &mock_terminator
+        )
+        .is_none());
 
         let active_no_pid = ActiveWindow {
             app_key: "chrome.exe".to_string(),
@@ -1075,7 +1089,13 @@ mod tests {
             app_path: None,
             pid: None,
         };
-        assert!(enforce_hard_limit(&l_exceeded_hard, Some(&active_no_pid), &mut failed, &mock_terminator).is_none());
+        assert!(enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_no_pid),
+            &mut failed,
+            &mock_terminator
+        )
+        .is_none());
 
         // Scenario 2: Happy path -> Some(Ok(())), calls terminator
         let active_match = ActiveWindow {
@@ -1085,14 +1105,24 @@ mod tests {
             app_path: None,
             pid: Some(123),
         };
-        let res = enforce_hard_limit(&l_exceeded_hard, Some(&active_match), &mut failed, &mock_terminator);
+        let res = enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_match),
+            &mut failed,
+            &mock_terminator,
+        );
         assert_eq!(res, Some(Ok(())));
         assert_eq!(*terminated.lock().unwrap(), vec![123]);
         assert!(failed.is_empty());
 
         // Scenario 3: Already failed PID -> None (throttled)
         failed.insert(123);
-        let res_throttled = enforce_hard_limit(&l_exceeded_hard, Some(&active_match), &mut failed, &mock_terminator);
+        let res_throttled = enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_match),
+            &mut failed,
+            &mock_terminator,
+        );
         assert!(res_throttled.is_none());
         // Verify no second termination call
         assert_eq!(*terminated.lock().unwrap(), vec![123]);
@@ -1106,7 +1136,12 @@ mod tests {
             pid: Some(999),
         };
         let mut failed_set = HashSet::new();
-        let res_denied = enforce_hard_limit(&l_exceeded_hard, Some(&active_permission_denied), &mut failed_set, &mock_terminator);
+        let res_denied = enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_permission_denied),
+            &mut failed_set,
+            &mock_terminator,
+        );
         assert_eq!(res_denied, Some(Err(TerminateError::PermissionDenied)));
         assert!(failed_set.contains(&999));
 
@@ -1119,7 +1154,12 @@ mod tests {
             pid: Some(888),
         };
         let mut failed_set_2 = HashSet::new();
-        let res_dead = enforce_hard_limit(&l_exceeded_hard, Some(&active_already_dead), &mut failed_set_2, &mock_terminator);
+        let res_dead = enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_already_dead),
+            &mut failed_set_2,
+            &mock_terminator,
+        );
         assert_eq!(res_dead, Some(Err(TerminateError::NoSuchProcess)));
         assert!(failed_set_2.contains(&888));
     }
