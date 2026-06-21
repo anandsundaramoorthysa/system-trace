@@ -10,6 +10,7 @@ import {
   Timer,
   Globe,
 } from "lucide-react";
+import { t } from "../lib/i18n";
 import {
   applyWebsiteBlock,
   clearWebsiteBlock,
@@ -224,11 +225,11 @@ export function Focus() {
               <Target className="h-5 w-5" />
             </span>
             <div>
-              <CardTitle>Focus mode</CardTitle>
+              <CardTitle>{t("focus.title", "Focus mode")}</CardTitle>
               <p className="text-body text-text-muted">
                 {focus?.active
-                  ? "Blocked apps will nudge you."
-                  : `Off. ${focus?.rules_count ?? 0} block rule(s) ready.`}
+                  ? t("focus.active_desc", "Blocked apps will nudge you.")
+                  : t("focus.off_desc", `Off. ${focus?.rules_count ?? 0} block rule(s) ready.`)}
               </p>
             </div>
           </div>
@@ -238,7 +239,7 @@ export function Focus() {
               {countdown !== null ? (
                 <span
                   className="rounded-md border border-border bg-bg px-3 py-1.5 font-mono text-stat tabular-nums text-text"
-                  aria-label="Time remaining in focus session"
+                  aria-label={t("focus.timer_aria", "Time remaining in focus session")}
                 >
                   {countdown}
                 </span>
@@ -248,7 +249,7 @@ export function Focus() {
                 onClick={stopSession}
                 className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-body-strong text-text hover:bg-surface-2"
               >
-                <Square className="h-4 w-4" aria-hidden /> Stop
+                <Square className="h-4 w-4" aria-hidden /> {t("focus.stop", "Stop")}
               </button>
             </div>
           ) : (
@@ -273,7 +274,7 @@ export function Focus() {
                 onClick={startSession}
                 className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-body-strong text-white"
               >
-                <Play className="h-4 w-4" aria-hidden /> Start focus
+                <Play className="h-4 w-4" aria-hidden /> {t("focus.start", "Start focus")}
               </button>
             </div>
           )}
@@ -282,13 +283,13 @@ export function Focus() {
         {focus?.active ? (
           <div className="mt-4 border-t border-border pt-4">
             <label htmlFor="session-note" className="text-label text-text-muted">
-              What are you working on? (saved when the session ends)
-            </label>
+              {t("focus.note_label", "What are you working on? (saved when the session ends)")}
+               </label>
             <input
               id="session-note"
               value={sessionNote}
               onChange={(e) => setSessionNote(e.target.value)}
-              placeholder="e.g. deep work on the auth refactor"
+              placeholder={t("focus.note_placeholder", "e.g. deep work on the auth refactor")}
               className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 text-body text-text placeholder:text-text-muted"
             />
           </div>
@@ -298,7 +299,7 @@ export function Focus() {
       {/* Recent sessions */}
       {recentSessions.length > 0 ? (
         <div className="space-y-2">
-          <CardTitle>Recent sessions</CardTitle>
+          <CardTitle>{t("focus.recent_title", "Recent sessions")}</CardTitle>
           <Card className="p-5">
             <ul className="divide-y divide-border">
               {recentSessions.map((sess) => {
@@ -307,7 +308,7 @@ export function Focus() {
                   <li key={sess.id} className="flex items-center justify-between gap-3 py-2.5">
                     <span className="min-w-0">
                       <span className="block truncate text-body-strong text-text">
-                        {sess.note ?? "Focus session"}
+                        {sess.note ?? t("focus.session_default", "Focus session")}
                       </span>
                       <span className="block text-label text-text-muted">
                         {new Date(sess.start_ms).toLocaleString(undefined, {
@@ -318,7 +319,7 @@ export function Focus() {
                         })}
                       </span>
                     </span>
-                    <span className="shrink-0 font-medium text-text">{mins}m</span>
+                    <span className="shrink-0 font-medium text-text">{`${mins}m`}</span>
                   </li>
                 );
               })}
@@ -329,7 +330,7 @@ export function Focus() {
 
       {/* Daily limits */}
       <div className="space-y-2">
-        <CardTitle>Daily app limits</CardTitle>
+        <CardTitle>{t("focus.limits_title", "Daily app limits")}</CardTitle>
         <Card className="p-5">
           <div className="mb-4 flex flex-wrap items-end gap-2">
             <select
@@ -337,7 +338,7 @@ export function Focus() {
               onChange={(e) => setLimApp(e.target.value)}
               className="rounded-md border border-border bg-bg px-2 py-1.5 text-body text-text"
             >
-              <option value="">Choose an app</option>
+              <option value="">{t("focus.limit_choose", "Choose an app")}</option>
               {available.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.display_name}
@@ -353,16 +354,16 @@ export function Focus() {
                 onChange={(e) => setLimMins(Number(e.target.value))}
                 className="w-20 rounded-md border border-border bg-bg px-2 py-1.5 text-body text-text"
               />
-              <span className="text-body text-text-muted">min/day</span>
+              <span className="text-body text-text-muted">{t("focus.limit_min_day", "min/day")}</span>
             </div>
             <select
               value={limStrict}
               onChange={(e) => setLimStrict(e.target.value as LimitStrictness)}
               className="rounded-md border border-border bg-bg px-2 py-1.5 text-body text-text"
             >
-              <option value="soft">Soft (track only)</option>
-              <option value="medium">Medium (nudge)</option>
-              <option value="strict">Strict (strong nudge)</option>
+              <option value="soft">{t("focus.limit_strict_soft", "Soft (track only)")} (track only)</option>
+              <option value="medium">{t("focus.limit_strict_med", "Medium (nudge)")} (nudge)</option>
+              <option value="strict">{t("focus.limit_strict_str", "Strict (strong nudge)")}</option>
             </select>
             <button
               type="button"
@@ -376,8 +377,8 @@ export function Focus() {
           {limits.length === 0 ? (
             <EmptyState
               icon={<Hourglass className="h-7 w-7" />}
-              title="No limits yet"
-              description="Set a daily cap on an app to get a gentle nudge when you reach it."
+              title={t("focus.no_limits_title", "No limits yet")}
+              description={t("focus.no_limits_desc","Set a daily cap on an app to get a gentle nudge when you reach it.")}
             />
           ) : (
             <ul className="space-y-4">
@@ -413,7 +414,7 @@ export function Focus() {
 
       {/* Block rules */}
       <div className="space-y-2">
-        <CardTitle>Block list (focus mode)</CardTitle>
+        <CardTitle>{t("focus.block_list_title", "Block list (focus mode)")} (focus mode)</CardTitle>
         <Card className="p-5">
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <select
@@ -421,13 +422,17 @@ export function Focus() {
               onChange={(e) => setRuleKind(e.target.value as BlockKind)}
               className="rounded-md border border-border bg-bg px-2 py-1.5 text-body text-text"
             >
-              <option value="app">App</option>
-              <option value="website">Website</option>
+              <option value="app">{t("focus.rule_kind_app", "App")}</option>
+              <option value={t("focus.rule_kind_web", "Website")}>Website</option>
             </select>
             <input
               value={rulePattern}
               onChange={(e) => setRulePattern(e.target.value)}
-              placeholder={ruleKind === "app" ? "e.g. game.exe" : "e.g. reddit.com"}
+              placeholder={
+                 ruleKind === "app" 
+                   ? t("focus.rule_pattern_placeholder", "e.g. game.exe") 
+                   : t("focus.rule_pattern_placeholder", "e.g. reddit.com")
+  }
               className="flex-1 rounded-md border border-border bg-bg px-3 py-1.5 text-body text-text placeholder:text-text-muted"
             />
             <button
@@ -435,15 +440,15 @@ export function Focus() {
               onClick={addRule}
               className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-body-strong text-white"
             >
-              <Plus className="h-4 w-4" aria-hidden /> Add rule
+              <Plus className="h-4 w-4" aria-hidden /> {t("focus.rule_add", "Add rule")}
             </button>
           </div>
 
           {rules.length === 0 ? (
             <EmptyState
               icon={<ShieldBan className="h-7 w-7" />}
-              title="No block rules"
-              description="Add apps or websites to block while focus mode is on."
+              title={t("focus.no_rules_title", "No block rules")}
+              description={t("focus.no_rules_desc","Add apps or websites to block while focus mode is on.")}
             />
           ) : (
             <ul className="space-y-1.5">
@@ -470,7 +475,7 @@ export function Focus() {
                         type="button"
                         onClick={() => dropRule(r.id)}
                         className="text-text-muted hover:text-negative"
-                        aria-label={`Remove rule ${r.pattern}`}
+                        aria-label={t("focus.rule_remove_aria", `Remove rule ${r.pattern}`)}
                       >
                         <Trash2 className="h-4 w-4" aria-hidden />
                       </button>
@@ -489,7 +494,7 @@ export function Focus() {
                           })
                         }
                       />
-                      Active only between
+                     {t("focus.rule_active_between", "Active only between")} 
                     </label>
                     <input
                       type="time"
@@ -500,7 +505,7 @@ export function Focus() {
                       }
                       className="rounded-md border border-border bg-bg px-2 py-1 text-body text-text disabled:opacity-50"
                     />
-                    <span>and</span>
+                    <span>{t("focus.rule_and", "and")}</span>
                     <input
                       type="time"
                       disabled={!r.schedule_enabled}
@@ -521,24 +526,19 @@ export function Focus() {
               onClick={applyBlock}
               className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2"
             >
-              <Globe className="h-4 w-4" aria-hidden /> Apply now
+              <Globe className="h-4 w-4" aria-hidden /> {t("focus.apply_now", "Apply now")}
             </button>
             <button
               type="button"
               onClick={clearBlock}
               className="rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2"
             >
-              Clear now
+              {t("focus.clear_now", "Clear now")}
             </button>
             {blockMsg && <span className="text-label text-text-muted">{blockMsg}</span>}
           </div>
           <p className="mt-3 text-label text-text-muted">
-            App rules nudge you when a blocked app is in front during focus mode. System-wide
-            website blocking edits the hosts file (requires running System Trace as
-            administrator) and now follows each rule&apos;s schedule automatically - blocks
-            apply when a window opens and clear when it ends. The buttons above just force an
-            immediate sync; a &quot;Clear now&quot; will re-apply within seconds if a rule is
-            still enabled and in its active window.
+            {t("focus.block_desc", "App rules nudge you when a blocked app is in front during focus mode. System-wide website blocking edits the hosts file (requires running System Trace as administrator) and now follows each rule's schedule automatically - blocks apply when a window opens and clear when it ends. The buttons above just force an immediate sync; a \"Clear now\" will re-apply within seconds if a rule is still enabled and in its active window.")}
           </p>
         </Card>
       </div>

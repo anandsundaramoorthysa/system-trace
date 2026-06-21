@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Coffee, Moon, Play, AlertCircle } from "lucide-react";
 import { getSettings, setSetting } from "../lib/api";
+import { t } from "../lib/i18n";
 import type { Settings, SettingKey } from "../lib/types";
 import { Card, CardTitle, Spinner, Toggle } from "../components/ui";
 import { Goals } from "../components/Goals";
@@ -40,7 +41,7 @@ export function Wellbeing() {
     );
   }
 
-  if (!s) return <Spinner label="Loading wellbeing settings" />;
+  if (!s) return <Spinner label={t("wellbeing.loading", "Loading wellbeing settings")} />;
 
   const quiet = s.bedtime_enabled && inQuietHours(s.bedtime_start, s.bedtime_end);
 
@@ -48,7 +49,7 @@ export function Wellbeing() {
     <div className="space-y-6">
       {/* Eye / posture breaks */}
       <div className="space-y-2">
-        <CardTitle>Break reminders</CardTitle>
+        <CardTitle>{t("wellbeing.break_reminders", "Break reminders")}</CardTitle>
         <Card className="p-5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -59,9 +60,9 @@ export function Wellbeing() {
                 <Coffee className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-body-strong text-text">Remind me to take breaks</p>
+                <p className="text-body-strong text-text">{t("wellbeing.remind_me", "Remind me to take breaks")}</p>
                 <p className="text-body text-text-muted">
-                  A short overlay after a stretch of continuous use, to rest your eyes.
+                { t("wellbeing.break_desc", "A short overlay after a stretch of continuous use, to rest your eyes.")}
                 </p>
               </div>
             </div>
@@ -73,7 +74,7 @@ export function Wellbeing() {
 
           <div className="mt-5 grid gap-4 sm:grid-cols-3">
             <label className="flex flex-col gap-1">
-              <span className="text-label text-text-muted">Every (minutes)</span>
+              <span className="text-label text-text-muted">{t("wellbeing.every_mins", "Every (minutes)")}</span>
               <input
                 type="number"
                 min={5}
@@ -89,7 +90,7 @@ export function Wellbeing() {
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-label text-text-muted">Break length (seconds)</span>
+              <span className="text-label text-text-muted">{t("wellbeing.break_length", "Break length (seconds)")} </span>
               <input
                 type="number"
                 min={5}
@@ -105,7 +106,7 @@ export function Wellbeing() {
               />
             </label>
             <div className="flex flex-col gap-1">
-              <span className="text-label text-text-muted">Strict (cannot skip)</span>
+              <span className="text-label text-text-muted">{t("wellbeing.strict", "Strict (cannot skip)")}</span>
               <div className="flex h-9 items-center">
                 <Toggle
                   checked={s.break_strict}
@@ -121,14 +122,14 @@ export function Wellbeing() {
             onClick={previewBreak}
             className="mt-5 flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-body-strong text-text hover:bg-surface-2"
           >
-            <Play className="h-4 w-4" aria-hidden /> Preview a break
+            <Play className="h-4 w-4" aria-hidden />{ t("wellbeing.preview_break", "Preview a break")}
           </button>
         </Card>
       </div>
 
       {/* Distraction nudges */}
       <div className="space-y-2">
-        <CardTitle>Distraction nudges</CardTitle>
+        <CardTitle>{t("wellbeing.distraction_nudges", "Distraction nudges")}</CardTitle>
         <Card className="p-5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -139,11 +140,9 @@ export function Wellbeing() {
                 <AlertCircle className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-body-strong text-text">Nudge me on sustained distracting use</p>
+                <p className="text-body-strong text-text">{t("wellbeing.nudge_me", "Nudge me on sustained distracting use")}</p>
                 <p className="text-body text-text-muted">
-                  After this many continuous minutes on an app whose category is
-                  marked distracting, a quiet toast appears. Quiet hours suppress
-                  these.
+                 { t("wellbeing.nudge_desc", "After this many continuous minutes on an app whose category is marked distracting, a quiet toast appears. Quiet hours suppress these.")}
                 </p>
               </div>
             </div>
@@ -158,7 +157,7 @@ export function Wellbeing() {
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
-              <span className="text-label text-text-muted">Threshold (minutes)</span>
+              <span className="text-label text-text-muted">{t("wellbeing.threshold", "Threshold (minutes)")}</span>
               <input
                 type="number"
                 min={5}
@@ -179,7 +178,7 @@ export function Wellbeing() {
 
       {/* Bedtime / wind-down */}
       <div className="space-y-2">
-        <CardTitle>Wind-down (quiet hours)</CardTitle>
+        <CardTitle>{t("wellbeing.wind_down", "Wind-down (quiet hours)")}</CardTitle>
         <Card className="p-5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -190,9 +189,9 @@ export function Wellbeing() {
                 <Moon className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-body-strong text-text">Quiet hours</p>
+                <p className="text-body-strong text-text">{t("wellbeing.quiet_hours", "Quiet hours")}</p>
                 <p className="text-body text-text-muted">
-                  During these hours, limit and break nudges stay quiet.
+                 { t("wellbeing.quiet_desc", "During these hours, limit and break nudges stay quiet.")}
                   {quiet ? " Quiet hours are active now." : ""}
                 </p>
               </div>
@@ -205,7 +204,7 @@ export function Wellbeing() {
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
-              <span className="text-label text-text-muted">Start</span>
+              <span className="text-label text-text-muted">{t("wellbeing.start", "Start")}</span>
               <input
                 type="time"
                 value={s.bedtime_start}
@@ -217,7 +216,7 @@ export function Wellbeing() {
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-label text-text-muted">End</span>
+              <span className="text-label text-text-muted">{t("wellbeing.end", "End")}</span>
               <input
                 type="time"
                 value={s.bedtime_end}
@@ -232,11 +231,9 @@ export function Wellbeing() {
 
           <div className="mt-5 flex items-start justify-between gap-4 border-t border-border pt-5">
             <div>
-              <p className="text-body-strong text-text">Apply OS grayscale during quiet hours</p>
+              <p className="text-body-strong text-text">{t("wellbeing.grayscale", "Apply OS grayscale during quiet hours")}</p>
               <p className="text-body text-text-muted">
-                Turns the screen monochrome on Windows, macOS, and (best-effort)
-                GNOME during quiet hours. May need a sign-out / sign-in on
-                macOS to take full effect.
+                {t("wellbeing.grayscale_desc", "Turns the screen monochrome on Windows, macOS, and (best-effort) GNOME during quiet hours. May need a sign-out / sign-in on macOS to take full effect.")}
               </p>
             </div>
             <Toggle

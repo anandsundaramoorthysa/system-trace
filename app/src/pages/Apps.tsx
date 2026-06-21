@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Search, AppWindow, History } from "lucide-react";
+import { t } from "../lib/i18n";
 import { getApps, getCategories, searchUsage, setAppCategory } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { Card, CardTitle, EmptyState, Spinner } from "../components/ui";
@@ -54,7 +55,7 @@ export function Apps() {
     <div className="space-y-6">
       {/* History search across all tracked time */}
       <div className="space-y-2">
-        <CardTitle>Search history</CardTitle>
+        <CardTitle>{t("apps.search_history", "Search history")}</CardTitle>
         <Card className="p-5">
           <form onSubmit={runHistorySearch} className="flex gap-2">
             <div className="relative flex-1">
@@ -65,8 +66,8 @@ export function Apps() {
               <input
                 value={histQuery}
                 onChange={(e) => setHistQuery(e.target.value)}
-                placeholder="Find when you used an app, e.g. Slack"
-                aria-label="Search your usage history"
+                placeholder={t("apps.search_placeholder", "Find when you used an app, e.g. Slack")}
+                aria-label={t("apps.search_aria", "Search your usage history")}
                 className="w-full rounded-md border border-border bg-bg py-2 pl-9 pr-3 text-body text-text placeholder:text-text-muted"
               />
             </div>
@@ -74,16 +75,16 @@ export function Apps() {
               type="submit"
               className="rounded-md bg-accent px-4 py-2 text-body-strong text-white transition-colors hover:opacity-90"
             >
-              Search
+              {t("apps.search_button", "Search")}
             </button>
           </form>
 
           {searching ? (
             <div className="mt-4">
-              <Spinner label="Searching" />
+              <Spinner label={t("apps.searching", "Searching")} />
             </div>
           ) : hits === null ? null : hits.length === 0 ? (
-            <p className="mt-4 text-body text-text-muted">No matching usage found.</p>
+            <p className="mt-4 text-body text-text-muted">{t("apps.no_results", "No matching usage found.")}</p>
           ) : (
             <ul className="mt-4 divide-y divide-border">
               {hits.map((h) => (
@@ -115,7 +116,7 @@ export function Apps() {
 
       {/* App list + re-categorize */}
       <div className="space-y-2">
-        <CardTitle>Apps</CardTitle>
+        <CardTitle>{t("apps.list_title", "Apps")}</CardTitle>
         <div className="relative max-w-sm">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
@@ -124,8 +125,8 @@ export function Apps() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter apps"
-            aria-label="Filter the app list"
+            placeholder={t("apps.filter_placeholder", "Filter apps")}
+            aria-label={t("apps.filter_aria", "Filter the app list")}
             className="w-full rounded-md border border-border bg-surface py-2 pl-9 pr-3 text-body text-text placeholder:text-text-muted"
           />
         </div>
@@ -134,8 +135,8 @@ export function Apps() {
           {filtered.length === 0 ? (
             <EmptyState
               icon={<AppWindow className="h-7 w-7" />}
-              title="No apps to show"
-              description="Apps you use are listed here once tracking has data."
+              title={t("apps.no_apps_title", "No apps to show")}
+              description={t("apps.no_apps_desc", "Apps you use are listed here once tracking has data.")}
             />
           ) : (
             <ul className="divide-y divide-border">
@@ -151,10 +152,10 @@ export function Apps() {
                   <select
                     value={a.category_id ?? ""}
                     onChange={(e) => onChangeCategory(a.id, e.target.value)}
-                    aria-label={`Category for ${a.display_name}`}
+                    aria-label={`${t("apps.category_aria", "Category for")} ${a.display_name}`}
                     className="rounded-md border border-border bg-bg px-2 py-1.5 text-body text-text"
                   >
-                    <option value="">Uncategorized</option>
+                    <option value="">{t("apps.category_uncategorized", "Uncategorized")}</option>
                     {cats.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
