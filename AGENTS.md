@@ -91,3 +91,11 @@ The core never calls OS APIs directly. The `Watcher` trait is the abstraction.
 - `pnpm test:e2e` for UI flows via WDIO + tauri-driver (requires debug build first)
 - E2E test mode auto-wipes DB, marks onboarding complete, and boots to dashboard
 - The collector takes a `Watcher` trait object - inject fakes in unit tests
+
+## Available Skills
+
+| Skill | Purpose |
+|-------|---------|
+| **conventional-commit** | Generate standardized commit messages following Conventional Commits spec (feat, fix, docs, etc.) |
+| **rust-best-practices** | Guide for writing idiomatic Rust code — borrowing patterns, error handling, performance, testing, generics |
+| **tauri-v2** | Build cross-platform desktop apps with Rust backend and React/TypeScript frontend — commands, IPC, permissions, configuration |
