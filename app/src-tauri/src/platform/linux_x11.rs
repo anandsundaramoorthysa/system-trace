@@ -104,6 +104,7 @@ impl X11Watcher {
             title,
             // No reliable per-window executable path on X11/Wayland.
             app_path: None,
+            pid: None,
         })
     }
 }

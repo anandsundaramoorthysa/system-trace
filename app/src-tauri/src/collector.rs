@@ -351,8 +351,38 @@ mod runtime {
         }
     }
 
+    pub(crate) fn enforce_hard_limit(
+        limit: &crate::models::LimitView,
+        active_win: Option<&platform::ActiveWindow>,
+        failed_terminations: &mut std::collections::HashSet<u32>,
+        terminator: &dyn platform::ProcessTerminator,
+    ) -> Option<Result<(), platform::TerminateError>> {
+        if !limit.exceeded || limit.strictness != LimitStrictness::Hard {
+            return None;
+        }
+        let aw = active_win?;
+        if aw.app_key != limit.app_key {
+            return None;
+        }
+        let pid = aw.pid?;
+        if failed_terminations.contains(&pid) {
+            return None;
+        }
+
+        let res = terminator.terminate_process(pid);
+        if res.is_err() {
+            failed_terminations.insert(pid);
+        }
+        Some(res)
+    }
+
     /// Start the collector thread. It runs for the life of the process.
-    pub fn spawn(app: AppHandle, db: Arc<Mutex<rusqlite::Connection>>, shared: Arc<Mutex<Shared>>) {
+    pub fn spawn(
+        app: AppHandle,
+        db: Arc<Mutex<rusqlite::Connection>>,
+        shared: Arc<Mutex<Shared>>,
+        terminator: Box<dyn platform::ProcessTerminator>,
+    ) {
         std::thread::Builder::new()
             .name("system-trace-collector".into())
             .spawn(move || {
@@ -367,6 +397,8 @@ mod runtime {
                 let mut last_emit = 0i64;
                 // Phase 2 control state.
                 let mut fired_limits: std::collections::HashSet<i64> =
+                    std::collections::HashSet::new();
+                let mut failed_terminations: std::collections::HashSet<u32> =
                     std::collections::HashSet::new();
                 let mut fired_day = db::local_day(now_ms());
                 let mut block_patterns: Vec<String> = Vec::new();
@@ -441,6 +473,7 @@ mod runtime {
 
                     let mut cur_key: Option<String> = None;
                     let mut cur_name: Option<String> = None;
+                    let mut active_win: Option<platform::ActiveWindow> = None;
                     let new_state;
                     let active_app;
 
@@ -452,6 +485,7 @@ mod runtime {
                         active_app = None;
                     } else {
                         let win = watcher.active_window();
+                        active_win = win.clone();
                         let idle = watcher.idle_ms();
                         let locked = watcher.session_locked();
                         let media = watcher.is_media_playing();
@@ -655,6 +689,7 @@ mod runtime {
                         if day != fired_day {
                             fired_day = day;
                             fired_limits.clear();
+                            failed_terminations.clear();
                             // Day rolled over: send any due daily/weekly summary.
                             check_summaries(&app, &db);
                         }
@@ -684,12 +719,64 @@ mod runtime {
                             block_patterns = db::enabled_app_block_patterns(&c).unwrap_or_default();
                             if let Ok(limits) = db::get_limits(&c) {
                                 for l in limits {
-                                    if l.exceeded
-                                        && l.strictness != LimitStrictness::Soft
-                                        && !fired_limits.contains(&l.app_id)
-                                    {
-                                        fired_limits.insert(l.app_id);
-                                        newly_exceeded.push(l);
+                                    if l.exceeded {
+                                        if l.strictness != LimitStrictness::Soft
+                                            && !fired_limits.contains(&l.app_id)
+                                        {
+                                            fired_limits.insert(l.app_id);
+                                            newly_exceeded.push(l.clone());
+                                        }
+
+                                        // Hard enforcement: terminate the process
+                                        if let Some(res) = enforce_hard_limit(
+                                            &l,
+                                            active_win.as_ref(),
+                                            &mut failed_terminations,
+                                            terminator.as_ref(),
+                                        ) {
+                                            match res {
+                                                Ok(_) => {
+                                                    let _ = app
+                                                        .notification()
+                                                        .builder()
+                                                        .title("App terminated")
+                                                        .body(format!(
+                                                            "{} was closed because it reached its daily limit.",
+                                                            l.display_name
+                                                        ))
+                                                        .show();
+                                                }
+                                                Err(e) => {
+                                                    match e {
+                                                        platform::TerminateError::NoSuchProcess => {
+                                                            log::info!("Attempted to terminate PID for {} but process was already dead.", l.display_name);
+                                                        }
+                                                        platform::TerminateError::PermissionDenied => {
+                                                            let _ = app
+                                                                .notification()
+                                                                .builder()
+                                                                .title("Limit Enforcement Failed")
+                                                                .body(format!(
+                                                                    "Permission denied. Could not terminate {}.",
+                                                                    l.display_name
+                                                                ))
+                                                                .show();
+                                                        }
+                                                        platform::TerminateError::Other(msg) => {
+                                                            let _ = app
+                                                                .notification()
+                                                                .builder()
+                                                                .title("Limit Enforcement Failed")
+                                                                .body(format!(
+                                                                    "Could not terminate {}: {}",
+                                                                    l.display_name, msg
+                                                                ))
+                                                                .show();
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -816,6 +903,7 @@ mod tests {
             app_name: app.to_string(),
             title: title.map(|t| t.to_string()),
             app_path: None,
+            pid: None,
         }
     }
 
@@ -900,5 +988,179 @@ mod tests {
         assert_eq!(ev.title.as_deref(), Some("A"));
         assert_eq!(ev.start_ms, 0);
         assert_eq!(ev.end_ms, 1000);
+    }
+
+    #[test]
+    fn test_enforce_hard_limit_scenarios() {
+        use super::runtime::enforce_hard_limit;
+        use crate::models::{LimitStrictness, LimitView};
+        use crate::platform::TerminateError;
+        use std::collections::HashSet;
+        use std::sync::{Arc, Mutex};
+
+        struct MockTerminator {
+            terminated_pids: Arc<Mutex<Vec<u32>>>,
+            fail_pids: std::collections::HashMap<u32, TerminateError>,
+        }
+
+        impl crate::platform::ProcessTerminator for MockTerminator {
+            fn terminate_process(&self, pid: u32) -> Result<(), TerminateError> {
+                if let Some(err) = self.fail_pids.get(&pid) {
+                    return Err(err.clone());
+                }
+                self.terminated_pids.lock().unwrap().push(pid);
+                Ok(())
+            }
+        }
+
+        let terminated = Arc::new(Mutex::new(Vec::new()));
+        let mut fail_pids = std::collections::HashMap::new();
+        fail_pids.insert(999, TerminateError::PermissionDenied);
+        fail_pids.insert(888, TerminateError::NoSuchProcess);
+
+        let mock_terminator = MockTerminator {
+            terminated_pids: terminated.clone(),
+            fail_pids,
+        };
+
+        let mut failed = HashSet::new();
+
+        let l_exceeded_hard = LimitView {
+            app_id: 1,
+            app_key: "chrome.exe".to_string(),
+            display_name: "Chrome".to_string(),
+            daily_ms: 1000,
+            used_ms: 2000,
+            strictness: LimitStrictness::Hard,
+            exceeded: true,
+        };
+
+        let l_exceeded_soft = LimitView {
+            app_id: 2,
+            app_key: "chrome.exe".to_string(),
+            display_name: "Chrome".to_string(),
+            daily_ms: 1000,
+            used_ms: 2000,
+            strictness: LimitStrictness::Soft,
+            exceeded: true,
+        };
+
+        let l_not_exceeded = LimitView {
+            app_id: 3,
+            app_key: "chrome.exe".to_string(),
+            display_name: "Chrome".to_string(),
+            daily_ms: 10000,
+            used_ms: 2000,
+            strictness: LimitStrictness::Hard,
+            exceeded: false,
+        };
+
+        // Scenario 1: Mismatch or no active window -> None, no termination
+        assert!(
+            enforce_hard_limit(&l_exceeded_soft, None, &mut failed, &mock_terminator).is_none()
+        );
+        assert!(enforce_hard_limit(
+            &l_not_exceeded,
+            Some(&win("chrome", None)),
+            &mut failed,
+            &mock_terminator
+        )
+        .is_none());
+
+        let active_mismatch = ActiveWindow {
+            app_key: "firefox.exe".to_string(),
+            app_name: "Firefox".to_string(),
+            title: None,
+            app_path: None,
+            pid: Some(123),
+        };
+        assert!(enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_mismatch),
+            &mut failed,
+            &mock_terminator
+        )
+        .is_none());
+
+        let active_no_pid = ActiveWindow {
+            app_key: "chrome.exe".to_string(),
+            app_name: "Chrome".to_string(),
+            title: None,
+            app_path: None,
+            pid: None,
+        };
+        assert!(enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_no_pid),
+            &mut failed,
+            &mock_terminator
+        )
+        .is_none());
+
+        // Scenario 2: Happy path -> Some(Ok(())), calls terminator
+        let active_match = ActiveWindow {
+            app_key: "chrome.exe".to_string(),
+            app_name: "Chrome".to_string(),
+            title: None,
+            app_path: None,
+            pid: Some(123),
+        };
+        let res = enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_match),
+            &mut failed,
+            &mock_terminator,
+        );
+        assert_eq!(res, Some(Ok(())));
+        assert_eq!(*terminated.lock().unwrap(), vec![123]);
+        assert!(failed.is_empty());
+
+        // Scenario 3: Already failed PID -> None (throttled)
+        failed.insert(123);
+        let res_throttled = enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_match),
+            &mut failed,
+            &mock_terminator,
+        );
+        assert!(res_throttled.is_none());
+        // Verify no second termination call
+        assert_eq!(*terminated.lock().unwrap(), vec![123]);
+
+        // Scenario 4: Permission denied -> Some(Err(PermissionDenied)), adds to failed set
+        let active_permission_denied = ActiveWindow {
+            app_key: "chrome.exe".to_string(),
+            app_name: "Chrome".to_string(),
+            title: None,
+            app_path: None,
+            pid: Some(999),
+        };
+        let mut failed_set = HashSet::new();
+        let res_denied = enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_permission_denied),
+            &mut failed_set,
+            &mock_terminator,
+        );
+        assert_eq!(res_denied, Some(Err(TerminateError::PermissionDenied)));
+        assert!(failed_set.contains(&999));
+
+        // Scenario 5: Already dead process -> Some(Err(NoSuchProcess)), adds to failed set
+        let active_already_dead = ActiveWindow {
+            app_key: "chrome.exe".to_string(),
+            app_name: "Chrome".to_string(),
+            title: None,
+            app_path: None,
+            pid: Some(888),
+        };
+        let mut failed_set_2 = HashSet::new();
+        let res_dead = enforce_hard_limit(
+            &l_exceeded_hard,
+            Some(&active_already_dead),
+            &mut failed_set_2,
+            &mock_terminator,
+        );
+        assert_eq!(res_dead, Some(Err(TerminateError::NoSuchProcess)));
+        assert!(failed_set_2.contains(&888));
     }
 }
