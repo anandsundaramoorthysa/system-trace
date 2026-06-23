@@ -131,31 +131,22 @@ cargo tauri ios build       # Release build
 
 ## Reference Documentation
 
-For deep-dive guidance on specific topics, see the following reference files:
+For deep-dive guidance on specific topics, see the upstream Tauri v2 documentation:
 
-| Topic | Reference File | Purpose |
-|-------|----------------|---------|
-| **Security & Permissions** | [`capabilities-reference.md`](references/capabilities-reference.md) | V2 security model, capability files, permissions, and scopes |
-| **IPC Patterns** | [`ipc-patterns.md`](references/ipc-patterns.md) | Decision framework for Commands, Events, and Channels |
-| **Official Plugins** | [`plugin-reference.md`](references/plugin-reference.md) | Install, registration, and permissions for all official plugins |
-| **Updater & Distribution** | [`updater-distribution-reference.md`](references/updater-distribution-reference.md) | Signing, updater setup, and platform-specific distribution |
-| **Advanced Runtime** | [`advanced-runtime-reference.md`](references/advanced-runtime-reference.md) | Tray icons, sidecars, deep links, and custom protocols |
-
-See the [References Index](references/README.md) for a complete navigation guide.
+| Topic | Link |
+|-------|------|
+| **Security & Permissions** | [Capabilities & Permissions](https://v2.tauri.app/security/capabilities/) |
+| **IPC Patterns** | [Calling Rust](https://v2.tauri.app/develop/calling-rust/) |
+| **Official Plugins** | [Plugin Reference](https://v2.tauri.app/plugin/) |
+| **Updater & Distribution** | [Updater Plugin](https://v2.tauri.app/plugin/updater/) |
+| **Advanced Runtime** | [System Tray](https://v2.tauri.app/develop/system-tray/) |
 
 ## File Structure
 
 ```
 tauri-v2/
 ├── SKILL.md        # Quick-start patterns, core rules, critical guidance
-├── README.md       # This file - discovery and quick reference
-└── references/     # Deep-dive reference documentation
-    ├── README.md                          # Index and navigation
-    ├── capabilities-reference.md          # Security model, permissions, scopes
-    ├── ipc-patterns.md                    # Commands, events, channels decision framework
-    ├── plugin-reference.md                # Exhaustive plugin install/register/permissions
-    ├── updater-distribution-reference.md  # Signing, HTTPS, platform distribution
-    └── advanced-runtime-reference.md      # Tray, sidecars, deep links, protocols
+└── README.md       # This file - discovery and quick reference
 ```
 
 ## Dependencies

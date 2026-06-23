@@ -138,11 +138,11 @@ async fn good(name: String) -> String {
 
 ## Deep-Dive References
 
-- **Security & permissions** → [`references/capabilities-reference.md`](references/capabilities-reference.md)
-- **IPC decision guide** → [`references/ipc-patterns.md`](references/ipc-patterns.md)
-- **Official plugins** → [`references/plugin-reference.md`](references/plugin-reference.md)
-- **Updater & distribution** → [`references/updater-distribution-reference.md`](references/updater-distribution-reference.md)
-- **Tray, sidecars, deep links** → [`references/advanced-runtime-reference.md`](references/advanced-runtime-reference.md)
+- **Security & permissions** → [Capabilities & Permissions](https://v2.tauri.app/security/capabilities/)
+- **IPC patterns** → [Calling Rust](https://v2.tauri.app/develop/calling-rust/)
+- **Official plugins** → [Plugin Reference](https://v2.tauri.app/plugin/)
+- **Updater & distribution** → [Updater Plugin](https://v2.tauri.app/plugin/updater/)
+- **Tray, sidecars, deep links** → [System Tray](https://v2.tauri.app/develop/system-tray/)
 
 ## Configuration Reference
 
@@ -234,7 +234,7 @@ serde_json = "1"
 
 ### Error Handling Pattern
 
-Use `Result<T, E>` and `thiserror` for type-safe error propagation across the IPC boundary. See [`references/ipc-patterns.md`](references/ipc-patterns.md) for full implementation details.
+Use `Result<T, E>` and `thiserror` for type-safe error propagation across the IPC boundary.
 
 ```rust
 use thiserror::Error;
@@ -294,7 +294,7 @@ fn create_user(args: CreateUserArgs) -> Result<User, String> {
 
 ### State Management Pattern
 
-Tauri state manages application data across commands. See [`references/ipc-patterns.md`](references/ipc-patterns.md) for more complex state patterns.
+Tauri state manages application data across commands.
 
 ```rust
 use std::sync::Mutex;
@@ -318,7 +318,7 @@ tauri::Builder::default()
 
 ### Event Emission Pattern
 
-Events are fire-and-forget notifications. See [`references/ipc-patterns.md`](references/ipc-patterns.md) for bidirectional examples.
+Events are fire-and-forget notifications.
 
 ```rust
 use tauri::Emitter;
@@ -343,7 +343,7 @@ const unlisten = await listen('task-progress', (e) => {
 
 ### Channel Streaming Pattern
 
-Channels provide high-frequency, typed streaming from Rust to Frontend. See [`references/ipc-patterns.md`](references/ipc-patterns.md) for full implementation details.
+Channels provide high-frequency, typed streaming from Rust to Frontend.
 
 ```rust
 use tauri::ipc::Channel;
@@ -389,19 +389,6 @@ fn focus_window(app: tauri::AppHandle) {
 
 **Why this matters:** Use `tauri::WebviewWindow` and `app.get_webview_window("label")` in v2 — the v1 `app.get_window()` API is removed in v2.
 
-## Bundled Resources
-
-### References
-
-Located in `references/`:
-- [`capabilities-reference.md`](references/capabilities-reference.md) - Permission patterns and examples
-- [`ipc-patterns.md`](references/ipc-patterns.md) - Complete IPC examples
-- [`plugin-reference.md`](references/plugin-reference.md) - Official plugin install, registration, and permission strings
-- [`updater-distribution-reference.md`](references/updater-distribution-reference.md) - Signing, HTTPS requirements, and bundle shipping
-- [`advanced-runtime-reference.md`](references/advanced-runtime-reference.md) - `TrayIconBuilder`, sidecars, deep links, and asset protocols
-
-> **Note:** For deep dives on specific topics, see the reference files above.
-
 ## Dependencies
 
 ### Required
@@ -425,7 +412,7 @@ Located in `references/`:
 | `tauri-plugin-http` | ^2 (v2+) | HTTP client | `http:default` |
 | `tauri-plugin-store` | ^2 (v2+) | Key-value storage | `store:default` |
 
-> **Plugin permissions are mandatory.** Installing a plugin without adding its permission string to a capability file causes silent runtime failures. See [`references/plugin-reference.md`](references/plugin-reference.md) for full install + permission details for all official plugins.
+> **Plugin permissions are mandatory.** Installing a plugin without adding its permission string to a capability file causes silent runtime failures. See the [Plugin Reference](https://v2.tauri.app/plugin/) for full install + permission details for all official plugins.
 
 ## Official Documentation
 
