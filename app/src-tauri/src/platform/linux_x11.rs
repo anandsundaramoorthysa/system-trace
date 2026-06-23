@@ -98,13 +98,23 @@ impl X11Watcher {
             _ => None,
         };
 
+        // PID via _NET_WM_PID (CARDINAL); best-effort.
+        let pid = match self.atom(b"_NET_WM_PID") {
+            Some(pid_atom) => c
+                .get_property(false, win, pid_atom, AtomEnum::CARDINAL, 0, 1)
+                .ok()
+                .and_then(|cookie| cookie.reply().ok())
+                .and_then(|reply| reply.value32().and_then(|mut iter| iter.next())),
+            _ => None,
+        };
+
         Some(ActiveWindow {
             app_name: app_key.clone(),
             app_key,
             title,
             // No reliable per-window executable path on X11/Wayland.
             app_path: None,
-            pid: None,
+            pid,
         })
     }
 }

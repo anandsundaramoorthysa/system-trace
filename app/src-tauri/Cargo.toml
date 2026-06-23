@@ -97,6 +97,7 @@ objc = "0.2"
 x11rb = { version = "0.13", features = ["screensaver"] }
 zbus = "4"
 image = { version = "0.25", default-features = false, features = ["png"] }
+nix = { version = "0.29.0", features = ["signal", "process"] }
 
 [features]
 # By default Tauri uses a custom-protocol on all platforms; this feature is

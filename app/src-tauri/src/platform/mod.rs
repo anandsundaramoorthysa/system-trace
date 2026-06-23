@@ -155,24 +155,27 @@ pub trait ProcessTerminator: Send + Sync {
 #[cfg(target_os = "windows")]
 pub use windows::WinTerminator as PlatformTerminator;
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "linux")]
+pub use linux::LinuxTerminator as PlatformTerminator;
+
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 pub struct PlatformTerminator;
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 impl PlatformTerminator {
     pub fn new() -> Self {
         PlatformTerminator
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 impl Default for PlatformTerminator {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 impl ProcessTerminator for PlatformTerminator {
     fn terminate_process(&self, _pid: u32) -> Result<(), TerminateError> {
         Err(TerminateError::Other(

@@ -125,3 +125,82 @@ pub(crate) fn is_alsa_media_playing() -> bool {
     }
     false
 }
+
+pub struct LinuxTerminator;
+
+impl LinuxTerminator {
+    pub fn new() -> Self {
+        LinuxTerminator
+    }
+}
+
+impl Default for LinuxTerminator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl super::ProcessTerminator for LinuxTerminator {
+    fn terminate_process(&self, pid: u32) -> Result<(), super::TerminateError> {
+        use nix::errno::Errno;
+        use nix::sys::signal::{kill, Signal};
+        use nix::unistd::Pid;
+
+        let pid_t = Pid::from_raw(pid as i32);
+
+        // 1. Send SIGTERM first.
+        match kill(pid_t, Signal::SIGTERM) {
+            Ok(_) => {
+                // 2. Spawn a background thread to wait and escalate to SIGKILL if still alive.
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(2000));
+                    // Check if process still exists
+                    if kill(pid_t, None).is_ok() {
+                        let _ = kill(pid_t, Signal::SIGKILL);
+                    }
+                });
+                Ok(())
+            }
+            Err(Errno::ESRCH) => Err(super::TerminateError::NoSuchProcess),
+            Err(Errno::EPERM) => Err(super::TerminateError::PermissionDenied),
+            Err(e) => Err(super::TerminateError::Other(e.to_string())),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::platform::ProcessTerminator;
+    use std::process::{Command, Stdio};
+
+    #[test]
+    fn test_linux_terminator_success() {
+        // Spawn a dummy process (e.g., sleep 10)
+        let mut child = Command::new("sleep")
+            .arg("10")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("Failed to spawn sleep process");
+
+        let pid = child.id();
+        let terminator = LinuxTerminator::new();
+
+        // Terminate the process
+        let res = terminator.terminate_process(pid);
+        assert!(res.is_ok());
+
+        // Wait for the child to exit and verify it was terminated
+        let status = child.wait().expect("Failed to wait on child");
+        assert!(!status.success()); // Should be killed by signal (not success exit)
+    }
+
+    #[test]
+    fn test_linux_terminator_no_such_process() {
+        let terminator = LinuxTerminator::new();
+        // Use a highly likely unused PID, e.g. 999999
+        let res = terminator.terminate_process(999999);
+        assert_eq!(res, Err(crate::platform::TerminateError::NoSuchProcess));
+    }
+}

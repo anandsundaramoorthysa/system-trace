@@ -27,6 +27,7 @@ struct GnomeWindowInfo {
     title: Option<String>,
     #[serde(alias = "class")]
     wm_class: Option<String>,
+    pid: Option<u32>,
 }
 
 pub struct DbusWaylandWindowFetcher {
@@ -56,7 +57,7 @@ impl WaylandWindowFetcher for DbusWaylandWindowFetcher {
                                     app_key,
                                     title: info.title,
                                     app_path: None,
-                                    pid: None,
+                                    pid: info.pid,
                                 });
                             }
                         }
@@ -70,7 +71,7 @@ impl WaylandWindowFetcher for DbusWaylandWindowFetcher {
                     "/org/gnome/Shell",
                     "org.gnome.Shell",
                 ) {
-                    let script = "let win = global.display.get_focus_window(); win ? JSON.stringify({class: win.get_wm_class(), title: win.get_title()}) : 'null'";
+                    let script = "let win = global.display.get_focus_window(); win ? JSON.stringify({class: win.get_wm_class(), title: win.get_title(), pid: win.get_pid ? win.get_pid() : null}) : 'null'";
                     let res: Result<(bool, String), zbus::Error> = proxy.call("Eval", &(script,));
                     if let Ok((success, result)) = res {
                         if success && result != "null" {
@@ -81,7 +82,7 @@ impl WaylandWindowFetcher for DbusWaylandWindowFetcher {
                                         app_key,
                                         title: info.title,
                                         app_path: None,
-                                        pid: None,
+                                        pid: info.pid,
                                     });
                                 }
                             }
@@ -107,14 +108,14 @@ pub struct ActiveWindowReceiver {
 #[zbus::interface(name = "org.system_trace.Receiver")]
 impl ActiveWindowReceiver {
     #[zbus(name = "UpdateActiveWindow")]
-    fn update_active_window(&self, app_key: String, title: String) {
+    fn update_active_window(&self, app_key: String, title: String, pid: u32) {
         if let Ok(mut active) = self.active.lock() {
             *active = Some(ActiveWindow {
                 app_name: app_key.clone(),
                 app_key,
                 title: if title.is_empty() { None } else { Some(title) },
                 app_path: None,
-                pid: None,
+                pid: if pid == 0 { None } else { Some(pid) },
             });
         }
     }
@@ -214,7 +215,8 @@ fn setup_kwin_script(conn: &zbus::blocking::Connection) -> Result<(), Box<dyn st
                     "org.system_trace.Receiver",
                     "UpdateActiveWindow",
                     window.resourceClass.toString(),
-                    window.caption
+                    window.caption,
+                    window.pid ? window.pid : 0
                 );
             }
         }
@@ -341,7 +343,7 @@ mod tests {
                 app_name: "Firefox".to_string(),
                 title: Some("GitHub".to_string()),
                 app_path: None,
-                pid: None,
+                pid: Some(1234),
             }),
         });
 
@@ -356,6 +358,7 @@ mod tests {
         assert_eq!(active.app_key, "firefox");
         assert_eq!(active.app_name, "Firefox");
         assert_eq!(active.title, Some("GitHub".to_string()));
+        assert_eq!(active.pid, Some(1234));
 
         // Test title capture gating
         watcher.set_capture_titles(false);

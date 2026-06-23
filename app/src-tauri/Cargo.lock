@@ -4071,6 +4071,7 @@ dependencies = [
  "image",
  "keyring",
  "log",
+ "nix",
  "objc",
  "rand 0.8.6",
  "rusqlite",
