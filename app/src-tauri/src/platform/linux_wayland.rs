@@ -56,6 +56,7 @@ impl WaylandWindowFetcher for DbusWaylandWindowFetcher {
                                     app_key,
                                     title: info.title,
                                     app_path: None,
+                                    pid: None,
                                 });
                             }
                         }
@@ -80,6 +81,7 @@ impl WaylandWindowFetcher for DbusWaylandWindowFetcher {
                                         app_key,
                                         title: info.title,
                                         app_path: None,
+                                        pid: None,
                                     });
                                 }
                             }
@@ -112,6 +114,7 @@ impl ActiveWindowReceiver {
                 app_key,
                 title: if title.is_empty() { None } else { Some(title) },
                 app_path: None,
+                pid: None,
             });
         }
     }
@@ -122,6 +125,12 @@ pub struct WaylandWatcher {
     fetcher: Box<dyn WaylandWindowFetcher>,
     desktop: String,
     capture_titles: bool,
+}
+
+impl Default for WaylandWatcher {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl WaylandWatcher {
@@ -332,6 +341,7 @@ mod tests {
                 app_name: "Firefox".to_string(),
                 title: Some("GitHub".to_string()),
                 app_path: None,
+                pid: None,
             }),
         });
 

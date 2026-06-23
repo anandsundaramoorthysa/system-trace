@@ -361,9 +361,10 @@ export function Focus() {
               onChange={(e) => setLimStrict(e.target.value as LimitStrictness)}
               className="rounded-md border border-border bg-bg px-2 py-1.5 text-body text-text"
             >
-              <option value="soft">{t("focus.limit_strict_soft", "Soft (track only)")} (track only)</option>
-              <option value="medium">{t("focus.limit_strict_med", "Medium (nudge)")} (nudge)</option>
+              <option value="soft">{t("focus.limit_strict_soft", "Soft (track only)")}</option>
+              <option value="medium">{t("focus.limit_strict_med", "Medium (nudge)")}</option>
               <option value="strict">{t("focus.limit_strict_str", "Strict (strong nudge)")}</option>
+              <option value="hard">{t("focus.limit_strict_hard", "Hard (kill process)")}</option>
             </select>
             <button
               type="button"

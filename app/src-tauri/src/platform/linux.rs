@@ -28,7 +28,7 @@ impl LinuxWatcher {
         let is_wayland = detect_session_type() == "wayland";
         let inner = if is_wayland {
             log::info!("Wayland session detected, starting WaylandWatcher");
-            WatcherImpl::Wayland(Box::new(WaylandWatcher::new()))
+            WatcherImpl::Wayland(Box::default())
         } else {
             log::info!("X11 session detected, starting X11Watcher");
             WatcherImpl::X11(Box::default())

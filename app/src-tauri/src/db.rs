@@ -1410,6 +1410,7 @@ fn parse_strictness(s: &str) -> LimitStrictness {
     match s {
         "soft" => LimitStrictness::Soft,
         "strict" => LimitStrictness::Strict,
+        "hard" => LimitStrictness::Hard,
         _ => LimitStrictness::Medium,
     }
 }
@@ -1419,6 +1420,7 @@ fn strictness_str(s: LimitStrictness) -> &'static str {
         LimitStrictness::Soft => "soft",
         LimitStrictness::Medium => "medium",
         LimitStrictness::Strict => "strict",
+        LimitStrictness::Hard => "hard",
     }
 }
 

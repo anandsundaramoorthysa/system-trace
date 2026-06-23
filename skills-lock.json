@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "skills": {
+    "conventional-commit": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "upstreamUrl": "https://github.com/github/copilot-instructions"
+    },
+    "rust-best-practices": {
+      "source": "apollographql/skills",
+      "sourceType": "github",
+      "upstreamUrl": "https://github.com/apollographql/rust-best-practices",
+      "license": "MIT"
+    },
+    "tauri-v2": {
+      "source": "nodnarbnitram/claude-code-extensions",
+      "sourceType": "github",
+      "upstreamUrl": "https://github.com/nodnarbnitram/claude-code-extensions"
+    }
+  }
+}

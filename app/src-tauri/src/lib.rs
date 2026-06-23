@@ -213,11 +213,12 @@ pub fn run() {
                 enc,
             });
 
-            // Start the always-on background collector: window/idle/media/lock
-            // sampling, batched event flushes, limits/wellbeing, and the
-            // periodic encrypted snapshot. This call was accidentally dropped in
-            // v0.3.0, which silently disabled ALL activity tracking - restore it.
-            collector::spawn(app.handle().clone(), db.clone(), shared.clone());
+            collector::spawn(
+                app.handle().clone(),
+                db.clone(),
+                shared.clone(),
+                crate::platform::make_terminator(),
+            );
 
             // Register the global pause/resume hotkey (default Ctrl+Alt+P).
             // Toggling shared.paused is enough: the collector reads it every

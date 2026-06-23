@@ -18,6 +18,8 @@ pub struct ActiveWindow {
     /// UI can extract a real OS icon for the app. `None` when not resolvable
     /// (e.g. Linux, where there's no reliable per-window path).
     pub app_path: Option<String>,
+    /// The process identifier (PID) of the active window, when known.
+    pub pid: Option<u32>,
 }
 
 /// The only platform-specific surface. Implementations must be cheap to call once
@@ -127,4 +129,58 @@ pub fn position_window_on_active_monitor(window: &tauri::WebviewWindow) {
 #[cfg(not(target_os = "windows"))]
 pub fn position_window_on_active_monitor(_window: &tauri::WebviewWindow) {
     // Non-windows fallback is a no-op (the window will just open on its default monitor)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TerminateError {
+    NoSuchProcess,
+    PermissionDenied,
+    Other(String),
+}
+
+impl std::fmt::Display for TerminateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TerminateError::NoSuchProcess => write!(f, "Process not found (already dead)"),
+            TerminateError::PermissionDenied => write!(f, "Permission denied"),
+            TerminateError::Other(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+pub trait ProcessTerminator: Send + Sync {
+    fn terminate_process(&self, pid: u32) -> Result<(), TerminateError>;
+}
+
+#[cfg(target_os = "windows")]
+pub use windows::WinTerminator as PlatformTerminator;
+
+#[cfg(not(target_os = "windows"))]
+pub struct PlatformTerminator;
+
+#[cfg(not(target_os = "windows"))]
+impl PlatformTerminator {
+    pub fn new() -> Self {
+        PlatformTerminator
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+impl Default for PlatformTerminator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+impl ProcessTerminator for PlatformTerminator {
+    fn terminate_process(&self, _pid: u32) -> Result<(), TerminateError> {
+        Err(TerminateError::Other(
+            "Not implemented on this platform".to_string(),
+        ))
+    }
+}
+
+pub fn make_terminator() -> Box<dyn ProcessTerminator> {
+    Box::new(PlatformTerminator::new())
 }
