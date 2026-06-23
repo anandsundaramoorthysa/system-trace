@@ -104,8 +104,7 @@ impl X11Watcher {
                 .get_property(false, win, pid_atom, AtomEnum::CARDINAL, 0, 1)
                 .ok()
                 .and_then(|cookie| cookie.reply().ok())
-                .and_then(|reply| reply.value32())
-                .and_then(|mut iter| iter.next()),
+                .and_then(|reply| reply.value32().and_then(|mut iter| iter.next())),
             _ => None,
         };
 
