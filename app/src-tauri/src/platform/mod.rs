@@ -41,6 +41,12 @@ pub trait Watcher: Send {
     /// watcher whose title lookup is expensive (e.g. the macOS Accessibility
     /// API) can skip it when off. Default: ignore (cheap title lookups).
     fn set_capture_titles(&mut self, _on: bool) {}
+    /// Best-effort: did the system just resume from sleep/suspend?
+    /// Detected by a large monotonic-clock jump between ticks.
+    /// `false` when unknown (MVP default).
+    fn session_suspended(&mut self) -> bool {
+        false
+    }
 }
 
 #[cfg(target_os = "windows")]

@@ -488,6 +488,7 @@ mod runtime {
                         active_win = win.clone();
                         let idle = watcher.idle_ms();
                         let locked = watcher.session_locked();
+                        let locked = locked || watcher.session_suspended();
                         let media = watcher.is_media_playing();
                         cur_key = win.as_ref().map(|w| w.app_key.clone());
                         cur_name = win.as_ref().map(|w| w.app_name.clone());
