@@ -73,7 +73,45 @@ impl Watcher for WinWatcher {
             // time to a synthetic "Unknown" app - otherwise every unresolvable
             // window across different real processes collapses into one bogus
             // usage row.
-            let (app_key, app_name, app_path) = process_name(pid)?;
+            let (mut app_key, mut app_name, mut app_path) = process_name(pid)?;
+
+            // If the app is ApplicationFrameHost.exe, find the hosted UWP process PID instead.
+            if app_key == "applicationframehost.exe" {
+                struct EnumData {
+                    parent_pid: u32,
+                    child_pid: Option<u32>,
+                }
+                let mut data = EnumData {
+                    parent_pid: pid,
+                    child_pid: None,
+                };
+                unsafe extern "system" fn enum_child_proc(
+                    hwnd: HWND,
+                    lparam: windows::Win32::Foundation::LPARAM,
+                ) -> windows::Win32::Foundation::BOOL {
+                    let data = &mut *(lparam.0 as *mut EnumData);
+                    let mut child_pid: u32 = 0;
+                    GetWindowThreadProcessId(hwnd, Some(&mut child_pid as *mut u32));
+                    if child_pid != 0 && child_pid != data.parent_pid {
+                        data.child_pid = Some(child_pid);
+                        return windows::Win32::Foundation::BOOL(0); // stop enumeration
+                    }
+                    windows::Win32::Foundation::BOOL(1) // continue
+                }
+                let _ = windows::Win32::UI::WindowsAndMessaging::EnumChildWindows(
+                    hwnd,
+                    Some(enum_child_proc),
+                    windows::Win32::Foundation::LPARAM(&mut data as *mut EnumData as isize),
+                );
+                if let Some(c_pid) = data.child_pid {
+                    if let Some((c_key, c_name, c_path)) = process_name(c_pid) {
+                        pid = c_pid;
+                        app_key = c_key;
+                        app_name = c_name;
+                        app_path = c_path;
+                    }
+                }
+            }
 
             let title = window_title(hwnd);
 
