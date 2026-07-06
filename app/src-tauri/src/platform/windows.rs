@@ -35,6 +35,12 @@ impl WinWatcher {
     }
 }
 
+impl Default for WinWatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Current output peak level (0.0..=1.0) of the default render endpoint, or
 /// `None` if it can't be read. A non-trivial peak means audio is actually
 /// coming out of the speakers right now (music, a video with sound, a call).
