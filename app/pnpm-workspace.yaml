@@ -1,0 +1,5 @@
+allowBuilds:
+  core-js: true
+  edgedriver: true
+  esbuild: true
+  geckodriver: true
