@@ -43,20 +43,42 @@ impl Default for WinWatcher {
 
 /// Current output peak level (0.0..=1.0) of the default render endpoint, or
 /// `None` if it can't be read. A non-trivial peak means audio is actually
-/// coming out of the speakers right now (music, a video with sound, a call).
+/// coming out of the speakers or headset right now (music, a video with sound, a call).
 unsafe fn render_peak() -> Option<f32> {
     use windows::Win32::Media::Audio::Endpoints::IAudioMeterInformation;
     use windows::Win32::Media::Audio::{
-        eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
+        eCommunications, eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
     let enumerator: IMMDeviceEnumerator =
         CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
-    let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
-    let meter: IAudioMeterInformation = device.Activate(CLSCTX_ALL, None).ok()?;
-    meter.GetPeakValue().ok()
+
+    let mut max_peak: Option<f32> = None;
+
+    // Check default console endpoint (multimedia / speakers)
+    if let Ok(device) = enumerator.GetDefaultAudioEndpoint(eRender, eConsole) {
+        let meter: Result<IAudioMeterInformation, _> = device.Activate(CLSCTX_ALL, None);
+        if let Ok(meter) = meter {
+            if let Ok(peak) = meter.GetPeakValue() {
+                max_peak = Some(peak);
+            }
+        }
+    }
+
+    // Check default communication endpoint (headsets / calls)
+    if let Ok(device) = enumerator.GetDefaultAudioEndpoint(eRender, eCommunications) {
+        let meter: Result<IAudioMeterInformation, _> = device.Activate(CLSCTX_ALL, None);
+        if let Ok(meter) = meter {
+            if let Ok(peak) = meter.GetPeakValue() {
+                max_peak = Some(max_peak.unwrap_or(0.0).max(peak));
+            }
+        }
+    }
+
+    max_peak
 }
+
 
 impl Watcher for WinWatcher {
     fn active_window(&mut self) -> Option<ActiveWindow> {
