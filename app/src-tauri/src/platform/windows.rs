@@ -79,7 +79,6 @@ unsafe fn render_peak() -> Option<f32> {
     max_peak
 }
 
-
 impl Watcher for WinWatcher {
     fn active_window(&mut self) -> Option<ActiveWindow> {
         unsafe {
