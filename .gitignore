@@ -3,6 +3,9 @@ node_modules/
 .pnp/
 .pnp.js
 .pnpm-store/
+# pnpm 10 writes a local build-approval config (allowBuilds) here on install;
+# it's environment-specific noise, not part of the repo.
+app/pnpm-workspace.yaml
 
 # Build output
 dist/

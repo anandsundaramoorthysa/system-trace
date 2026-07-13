@@ -18,9 +18,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
 };
 
-#[derive(Default)]
-pub struct WinWatcher;
-
+pub struct WinWatcher {
+    last_tick: Option<(std::time::Instant, u64)>,
+}
 impl WinWatcher {
     pub fn new() -> Self {
         // Initialize COM on this (collector) thread so the WASAPI peak-meter
@@ -31,7 +31,13 @@ impl WinWatcher {
             use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
-        WinWatcher
+        WinWatcher { last_tick: None }
+    }
+}
+
+impl Default for WinWatcher {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -73,7 +79,45 @@ impl Watcher for WinWatcher {
             // time to a synthetic "Unknown" app - otherwise every unresolvable
             // window across different real processes collapses into one bogus
             // usage row.
-            let (app_key, app_name, app_path) = process_name(pid)?;
+            let (mut app_key, mut app_name, mut app_path) = process_name(pid)?;
+
+            // If the app is ApplicationFrameHost.exe, find the hosted UWP process PID instead.
+            if app_key == "applicationframehost.exe" {
+                struct EnumData {
+                    parent_pid: u32,
+                    child_pid: Option<u32>,
+                }
+                let mut data = EnumData {
+                    parent_pid: pid,
+                    child_pid: None,
+                };
+                unsafe extern "system" fn enum_child_proc(
+                    hwnd: HWND,
+                    lparam: windows::Win32::Foundation::LPARAM,
+                ) -> windows::Win32::Foundation::BOOL {
+                    let data = &mut *(lparam.0 as *mut EnumData);
+                    let mut child_pid: u32 = 0;
+                    GetWindowThreadProcessId(hwnd, Some(&mut child_pid as *mut u32));
+                    if child_pid != 0 && child_pid != data.parent_pid {
+                        data.child_pid = Some(child_pid);
+                        return windows::Win32::Foundation::BOOL(0); // stop enumeration
+                    }
+                    windows::Win32::Foundation::BOOL(1) // continue
+                }
+                let _ = windows::Win32::UI::WindowsAndMessaging::EnumChildWindows(
+                    hwnd,
+                    Some(enum_child_proc),
+                    windows::Win32::Foundation::LPARAM(&mut data as *mut EnumData as isize),
+                );
+                if let Some(c_pid) = data.child_pid {
+                    if let Some((c_key, c_name, c_path)) = process_name(c_pid) {
+                        pid = c_pid;
+                        app_key = c_key;
+                        app_name = c_name;
+                        app_path = c_path;
+                    }
+                }
+            }
 
             let title = window_title(hwnd);
 
@@ -145,6 +189,20 @@ impl Watcher for WinWatcher {
                 Err(_) => true,
             }
         }
+    }
+    fn session_suspended(&mut self) -> bool {
+        use std::time::Instant;
+        let now_instant = Instant::now();
+        let now_tick = unsafe { GetTickCount() } as u64;
+        let suspended = if let Some((prev_instant, prev_tick)) = self.last_tick {
+            let wall_ms = now_instant.duration_since(prev_instant).as_millis() as u64;
+            let tick_ms = now_tick.wrapping_sub(prev_tick);
+            wall_ms > tick_ms + 3_000
+        } else {
+            false
+        };
+        self.last_tick = Some((now_instant, now_tick));
+        suspended
     }
 }
 
