@@ -164,24 +164,27 @@ pub use windows::WinTerminator as PlatformTerminator;
 #[cfg(target_os = "linux")]
 pub use linux::LinuxTerminator as PlatformTerminator;
 
-#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+#[cfg(target_os = "macos")]
+pub use macos::MacTerminator as PlatformTerminator;
+
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
 pub struct PlatformTerminator;
 
-#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
 impl PlatformTerminator {
     pub fn new() -> Self {
         PlatformTerminator
     }
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
 impl Default for PlatformTerminator {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
 impl ProcessTerminator for PlatformTerminator {
     fn terminate_process(&self, _pid: u32) -> Result<(), TerminateError> {
         Err(TerminateError::Other(
