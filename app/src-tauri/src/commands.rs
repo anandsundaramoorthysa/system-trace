@@ -185,9 +185,9 @@ pub fn set_setting(
     // Mirror collector-affecting settings into the live shared state.
     let mut s = lock(&state.shared)?;
     match key.as_str() {
-        "idle_threshold_secs" => {
+        "idle_timeout_mins" => {
             if let Ok(v) = value.parse::<u64>() {
-                s.idle_threshold_ms = v * 1000;
+                s.idle_threshold_ms = v * 60 * 1000;
             }
         }
         "capture_titles" => s.capture_titles = value == "true" || value == "1",

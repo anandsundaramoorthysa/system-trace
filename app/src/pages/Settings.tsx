@@ -345,6 +345,25 @@ export function Settings() {
           }
         />
         <Row
+  title={t("settings.idle_timeout", "Idle timeout")}
+  description={t(
+    "settings.idle_timeout_desc",
+    "Minutes of inactivity before the collector switches to idle."
+  )}
+  control={
+    <input
+      type="number"
+      min={1}
+      max={60}
+      value={s.idle_timeout_mins}
+      onChange={(e) =>
+        setNum("idle_timeout_mins", Number(e.target.value))
+      }
+      className="w-24 rounded-md border border-border bg-bg px-2 py-1.5 text-body text-text"
+    />
+  }
+/>
+        <Row
           title={t("settings.capture_titles", "Capture window titles")}
           description={t("settings.capture_desc", "Off by default for privacy. Titles can contain private text.")}
           control={

@@ -180,7 +180,7 @@ pub fn run() {
             };
 
             let shared = Arc::new(Mutex::new(Shared::new(
-                settings.idle_threshold_secs as u64 * 1000,
+                settings.idle_timeout_mins as u64 * 60 * 1000,
                 settings.capture_titles,
                 tracking_paused,
             )));

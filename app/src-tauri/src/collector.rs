@@ -961,6 +961,18 @@ mod tests {
     }
 
     #[test]
+fn configurable_idle_threshold_is_honored() {
+    let short = SessionBuilder::new(60_000, false);   // 1 minute
+    let long = SessionBuilder::new(180_000, false);   // 3 minutes
+
+    // 90 seconds idle:
+    // - exceeds the 1 minute threshold
+    // - does not exceed the 3 minute threshold
+    assert!(!short.is_active(true, 90_000, false, false));
+    assert!(long.is_active(true, 90_000, false, false));
+}
+
+    #[test]
     fn zero_length_session_is_dropped() {
         let mut b = SessionBuilder::new(120_000, false);
         // Single sample then idle: opened and immediately closed, no event.
