@@ -16,6 +16,7 @@ import type { CollectorState } from "./lib/types";
 import { getCollectorState, getSettings, onUsageTick, setTrackingPaused } from "./lib/api";
 import { initNotifications } from "./lib/notify";
 import { t } from "./lib/i18n";
+import { ScrollToTop } from "./components/ScrollToTop";
 
 const TITLES: Record<Page, string> = {
   dashboard: "Dashboard",
@@ -99,6 +100,7 @@ export default function App() {
           {page === "wellbeing" && <Wellbeing />}
           {page === "settings" && <Settings />}
         </main>
+        <ScrollToTop />
       </div>
       <BreakOverlay />
       <DistractionToast />
