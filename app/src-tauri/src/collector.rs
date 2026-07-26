@@ -962,8 +962,8 @@ mod tests {
 
     #[test]
     fn configurable_idle_threshold_is_honored() {
-        let short = SessionBuilder::new(60_000, false);   // 1 minute
-        let long = SessionBuilder::new(180_000, false);   // 3 minutes
+        let short = SessionBuilder::new(60_000, false); // 1 minute
+        let long = SessionBuilder::new(180_000, false); // 3 minutes
 
         // 90 seconds idle:
         // - exceeds the 1 minute threshold
