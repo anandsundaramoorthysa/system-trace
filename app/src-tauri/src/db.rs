@@ -969,6 +969,9 @@ pub fn get_settings(conn: &Connection) -> DbResult<Settings> {
         idle_threshold_secs: get("idle_threshold_secs")?
             .and_then(|v| v.parse().ok())
             .unwrap_or(120),
+        idle_timeout_mins: get("idle_timeout_mins")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2),
         capture_titles: get("capture_titles")?
             .map(|v| parse_bool(&v))
             .unwrap_or(false),

@@ -291,6 +291,8 @@ pub struct Settings {
     pub theme: ThemePreference,
     /// Idle threshold in seconds (default 120).
     pub idle_threshold_secs: u32,
+    /// User-configurable inactivity timeout in minutes (default 2).
+    pub idle_timeout_mins: u32,
     /// Window-title capture; OFF by default.
     pub capture_titles: bool,
     /// Raw `event` retention in days (default 90). Summaries kept forever.

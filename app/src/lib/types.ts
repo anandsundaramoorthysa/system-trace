@@ -279,6 +279,8 @@ export interface Settings {
   theme: ThemePreference;
   /** Idle threshold in seconds (default 120). */
   idle_threshold_secs: number;
+  /** User-configurable inactivity timeout in minutes (default 2). */
+  idle_timeout_mins: number;
   /** Window-title capture; OFF by default. */
   capture_titles: boolean;
   /** Raw `event` retention in days (default 90). Summaries are kept forever. */
@@ -325,6 +327,7 @@ export interface Settings {
 export type SettingKey =
   | "theme"
   | "idle_threshold_secs"
+  | "idle_timeout_mins"
   | "capture_titles"
   | "retention_days"
   | "tracking_paused"
