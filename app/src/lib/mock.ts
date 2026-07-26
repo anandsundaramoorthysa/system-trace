@@ -146,6 +146,7 @@ export function mockSettings(): Settings {
   return {
     theme: "system",
     idle_threshold_secs: 120,
+    idle_timeout_mins: 2,
     capture_titles: false,
     retention_days: 90,
     tracking_paused: false,
