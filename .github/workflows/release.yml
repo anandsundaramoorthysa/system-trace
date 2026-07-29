@@ -1,8 +1,9 @@
 name: Release
 
-# Tag a version (e.g. v0.1.0) to build installers for all three OSes and attach
-# them to a GitHub Release (the primary distribution channel; see
-# docs/DISTRIBUTION.md). Signing/notarization are deferred and added later.
+# Tag a version (e.g. v0.1.0) to build installers for Windows, Linux, and both
+# macOS architectures, then attach them to a GitHub Release (the primary
+# distribution channel; see docs/DISTRIBUTION.md). Signing/notarization are
+# deferred and added later.
 on:
   push:
     tags:
@@ -16,7 +17,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-22.04
+            args: ""
+          - os: windows-latest
+            args: ""
+          - os: macos-latest
+            args: ""
+          - os: macos-13
+            args: --target x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +55,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Intel macOS Rust target
+        if: matrix.os == 'macos-13'
+        run: rustup target add x86_64-apple-darwin
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
@@ -62,9 +75,11 @@ jobs:
           projectPath: app
           tagName: ${{ github.ref_name }}
           releaseName: "System Trace ${{ github.ref_name }}"
-          releaseBody: "Download the installer for your OS below. All data stays local on your machine."
+          releaseBody: "Download the installer for your OS below. On macOS, choose Apple Silicon or Intel as appropriate. All data stays local on your machine."
+          releaseAssetNamePattern: "[name]_[version]_[arch].[ext]"
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.args }}
 
   # Package the companion browser extension and attach it to the same draft
   # release, so users can grab the load-unpacked zip alongside the installers.
