@@ -7,7 +7,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-Nothing yet. New work in progress lives here until the next tagged release.
+### Added
+
+- The GitHub release workflow now builds an Intel `x86_64-apple-darwin`
+  macOS installer alongside the Apple Silicon build, so Intel Macs get a
+  native `.dmg` in tagged releases.
 
 ## [0.4.2] - 2026-06-14 - Critical: the app could not launch after a restart
 
