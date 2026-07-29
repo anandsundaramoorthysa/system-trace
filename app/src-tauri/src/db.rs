@@ -830,11 +830,13 @@ pub fn range_overview(conn: &Connection, from: &str, to: &str) -> DbResult<Range
 /* ----------------------------- apps + categories -------------------------- */
 
 /// Remember an app's executable / bundle path (for icon extraction). Only
-/// fills it in when we don't already have one, to avoid per-tick writes.
+/// fills it in when we don't already have one, to avoid per-tick writes. A
+/// previous best-effort miss is stored as "none"; replace that if the collector
+/// later learns a real path.
 pub fn set_app_path(conn: &Connection, app_key: &str, path: &str) -> DbResult<()> {
     conn.execute(
         "UPDATE app SET exe_path = ?2
-         WHERE app_key = ?1 AND (exe_path IS NULL OR exe_path = '')",
+         WHERE app_key = ?1 AND (exe_path IS NULL OR exe_path = '' OR exe_path = 'none')",
         params![app_key, path],
     )
     .map_err(map_err)?;
@@ -1772,6 +1774,29 @@ mod tests {
         let conn = mem();
         let cats = get_categories(&conn).unwrap();
         assert!(cats.len() >= 5);
+    }
+
+    #[test]
+    fn app_path_replaces_temporary_icon_miss() {
+        let conn = mem();
+        conn.execute(
+            "INSERT INTO app (app_key, display_name, exe_path)
+             VALUES ('chrome.exe', 'chrome', 'none')",
+            [],
+        )
+        .unwrap();
+
+        set_app_path(
+            &conn,
+            "chrome.exe",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        )
+        .unwrap();
+
+        assert_eq!(
+            get_app_path(&conn, "chrome.exe").unwrap().as_deref(),
+            Some(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+        );
     }
 
     #[test]

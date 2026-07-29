@@ -29,11 +29,12 @@ function hashColor(key: string): string {
   return CHIP_COLORS[h % CHIP_COLORS.length];
 }
 
-// appKey -> data URL ("" means "no real icon, use the letter"). Shared so each
-// icon is fetched and painted at most once per session.
+// appKey -> data URL promise. Shared so lists do not refetch while a real icon
+// is loading; misses are evicted so a later collector tick can fill exe_path.
 const iconCache = new Map<string, Promise<string>>();
 
-function loadIcon(appKey: string): Promise<string> {
+function loadIcon(appKey: string, force = false): Promise<string> {
+  if (force) iconCache.delete(appKey);
   const cached = iconCache.get(appKey);
   if (cached) return cached;
   const p = getAppIcon(appKey)
@@ -52,7 +53,11 @@ function loadIcon(appKey: string): Promise<string> {
       ctx.putImageData(img, 0, 0);
       return canvas.toDataURL("image/png");
     })
-    .catch(() => "");
+    .catch(() => "")
+    .then((url) => {
+      if (!url) iconCache.delete(appKey);
+      return url;
+    });
   iconCache.set(appKey, p);
   return p;
 }
@@ -70,13 +75,23 @@ export function AppAvatar({
 
   useEffect(() => {
     let alive = true;
-    loadIcon(appKey)
-      .then((url) => {
-        if (alive) setSrc(url);
-      })
-      .catch(() => {});
+    const retryDelaysMs = [0, 1_500, 4_000];
+    const timers: number[] = [];
+
+    retryDelaysMs.forEach((delay, index) => {
+      const timer = window.setTimeout(() => {
+        loadIcon(appKey, index > 0)
+          .then((url) => {
+            if (alive && url) setSrc(url);
+          })
+          .catch(() => {});
+      }, delay);
+      timers.push(timer);
+    });
+
     return () => {
       alive = false;
+      timers.forEach(window.clearTimeout);
     };
   }, [appKey]);
 
