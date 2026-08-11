@@ -1,6 +1,6 @@
 [package]
 name = "system-trace"
-version = "0.4.2"
+version = "0.5.0"
 description = "Privacy-first, local-first, cross-platform screen-time tracker."
 authors = ["ANAND SUNDARAMOORTHY SA"]
 license = "MIT"

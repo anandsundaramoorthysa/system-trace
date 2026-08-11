@@ -75,9 +75,10 @@ The marketing website lives in a separate repository
 
 ## Features
 
-- **Automatic tracking:** records the active app and window with smart idle detection that
-  still counts videos and meetings - audio actually playing keeps you "active", and a
-  locked screen counts as inactive (Windows/macOS), with real app icons in the lists.
+- **Automatic tracking:** records the active app and window with smart, **configurable**
+  idle detection that still counts videos, music, and calls - audio playing (including a
+  **headset call**) keeps you "active", while a locked screen or a sleeping machine counts
+  as inactive - with **real app icons on all three platforms**.
 - **Encrypted, local-first storage:** the live database runs in memory and is persisted only
   as **encrypted** snapshots (XChaCha20-Poly1305; key in the OS keyring), so no plaintext
   database sits on disk. No cloud, no account, no telemetry.
@@ -88,9 +89,11 @@ The marketing website lives in a separate repository
   week and month views show the daily-usage bars and aggregates for the picked period.
   Left and right arrow keys step through history.
 - **Search history:** find when you used an app across all tracked time, grouped by day.
-- **Neutral categories:** group apps your way, with an optional Focus Score.
+- **Custom categories:** create, rename, recolor, and delete your own categories to group
+  apps your way, with an optional Focus Score.
 - **Per-app daily limits:** set a cap and choose how strict the nudge is - a **strict**
-  limit shows a blocking lockout overlay when reached, not just a nudge.
+  limit shows a blocking lockout overlay when reached, and a **hard** limit can terminate
+  the app's process (Windows, macOS, and Linux), not just nudge.
 - **Goals:** daily "stay under / reach at least" targets on **categories and individual
   apps**, each with a consecutive-day streak.
 - **PDF reports:** export a one-page summary of the current day, week, or month.
@@ -285,16 +288,20 @@ Contributions are welcome - bug fixes, the macOS and Linux watchers, new feature
 - [x] Data-at-rest encryption (in-memory DB + encrypted snapshots, key in the
       OS keyring)
 - [x] Media-aware idle and lock detection (all OS)
-- [x] Real app icons (Windows/macOS; Linux falls back to a letter avatar)
+- [x] Real app icons on all three platforms (Windows, macOS, and Linux)
 - [x] Per-app goals, strict-limit lockout, and PDF report export
 - [x] macOS window-title capture (with Accessibility permission)
 - [x] Companion browser extension for per-site detail (`extension/`,
       load-unpacked)
-- [ ] Linux Wayland active-window support (X11 / XWayland is done; pure-Wayland
-      windows degrade safely and idle time is not counted as active)
-- [ ] System-wide website blocking without elevation (a privileged helper);
-      blocking already follows each rule's schedule automatically, but editing
-      the hosts file still requires running as administrator / root
+- [x] Linux Wayland active-window and idle tracking (GNOME/KDE via D-Bus, with
+      X11 fallback; stock GNOME Wayland without the focused-window extension
+      degrades safely)
+- [x] Hard-kill per-app limit enforcement on all three OSes
+- [x] Custom app categories and a configurable idle timeout
+- [x] Multi-monitor break overlay (Windows) and an Intel macOS installer
+- [x] Linux system-wide website blocking via a `pkexec` prompt (no longer needs
+      running the whole app as root); Windows/macOS still edit the hosts file
+      with elevation
 - [ ] Code signing and notarization, and an auto-updater (require paid
       certificates / accounts)
 

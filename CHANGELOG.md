@@ -7,11 +7,68 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-12 - Cross-platform parity: Wayland, hard-kill, custom categories
+
+A large release built with the community during Social Summer of Code 2026.
+Every platform gets closer to parity, per-app limits can now truly enforce, and
+users get custom categories and a configurable idle timeout.
+
 ### Added
 
-- The GitHub release workflow now builds an Intel `x86_64-apple-darwin`
-  macOS installer alongside the Apple Silicon build, so Intel Macs get a
-  native `.dmg` in tagged releases.
+- **Linux Wayland active-window and idle tracking.** GNOME/KDE via a D-Bus-first
+  strategy with a runtime X11 / Wayland router; stock GNOME Wayland without the
+  focused-window extension degrades safely.
+- **Hard-kill per-app limit enforcement on all three OSes.** A new "Hard"
+  strictness terminates the offending process (Windows via `TerminateProcess`;
+  Linux and macOS via `SIGTERM` -> `SIGKILL`), behind a shared
+  `ProcessTerminator` trait, with graceful notifications on failure.
+- **Real OS app-icon extraction on Linux.** Resolves the app's `.desktop` entry
+  and the active icon theme (with `hicolor` / `pixmaps` fallbacks).
+- **macOS window-title capture** via the Accessibility API, with a permission
+  prompt and graceful degradation when permission is denied.
+- **Custom app categories.** Create, rename, recolor, and delete your own
+  categories (app groups) directly from the Apps screen.
+- **Configurable idle timeout.** Choose how many minutes of inactivity count as
+  idle, in Settings (default 2 minutes).
+- **Multi-monitor break overlay.** On Windows, the break/limit overlay now
+  appears on the monitor holding the focused window.
+- **Scroll-to-top button** for long pages.
+- **Linux system-wide website blocking without running the whole app as root** —
+  uses `pkexec` (Polkit) to edit `/etc/hosts`, staged via a private temp file.
+- **Intel (`x86_64`) macOS installer** in the release matrix, alongside Apple
+  Silicon, with architecture-suffixed asset names.
+- **CodeQL security scanning** (Rust + TypeScript) on every pull request.
+- **`AGENTS.md`** and agent-skill manifests for contributors.
+
+### Fixed
+
+- **Call / meeting audio no longer counts as idle.** Media detection now also
+  checks the WASAPI communications endpoint, so headset calls keep the session
+  active.
+- **UWP apps** (Calculator, Settings, Store, ...) now resolve to the real app
+  instead of collapsing into the generic `ApplicationFrameHost`.
+- **App icons resolve for apps first seen this session.** A stale `"none"` path
+  no longer sticks, so apps like Chrome show their real icon.
+- **Bedtime grayscale on Linux** now saves and restores the user's real GTK
+  theme instead of clobbering it.
+- **Orphaned `.enc.corrupt` quarantine files** are pruned after a successful
+  startup, and the Linux hosts file is staged to a private `0600` / `O_EXCL`
+  temp file before the privileged copy.
+
+### Changed
+
+- **Full i18n string migration** across the core pages onto a `t()` translation
+  catalog, keeping English fallbacks.
+- The GitHub release workflow now builds an Intel `x86_64-apple-darwin` macOS
+  installer alongside the Apple Silicon build.
+
+### Verified (by the community, on real hardware)
+
+- Windows: real app-icon extraction across app types; packaged-installer
+  autostart and close-to-tray; sleep/suspend idle handling.
+- Windows and Linux: data-at-rest encryption and key persistence, including the
+  headless `db.key` fallback.
+- Linux: the `pkexec` hosts-file website blocker; autostart and close-to-tray.
 
 ## [0.4.2] - 2026-06-14 - Critical: the app could not launch after a restart
 
