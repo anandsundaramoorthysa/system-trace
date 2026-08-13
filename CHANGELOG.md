@@ -7,6 +7,43 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-13 - Reliability and security hardening
+
+A focused bug-fix and security release from a deep three-lens code audit
+(reliability/QA, security, and Rust/React correctness). No feature changes.
+
+### Fixed
+
+- **Data loss after long use ("the app reset / my history vanished").** The
+  root cause was a single-point-of-failure encryption key: if the OS keyring
+  entry was ever lost, the app minted a new key and silently discarded all
+  encrypted history. Now the key has a durable, OS-protected backup (DPAPI on
+  Windows, mode-0600 on Unix); a lost key **fails closed** instead of wiping; a
+  corrupt snapshot is quarantined (timestamped, never auto-deleted) with a
+  recovery notice instead of silently starting over; a migration failure never
+  wipes intact data; and snapshots are written durably (fsync).
+- **Website block rules could not be created** from the UI (the control sent the
+  wrong value).
+- **Auto-ended focus sessions** are now saved (previously only manual stops).
+- The finer **"Idle threshold (seconds)"** setting now actually controls idle
+  detection.
+- Per-app **block matching** is precise - a short pattern no longer blocks
+  unrelated apps.
+- **Wipe all data** now also clears focus sessions, block rules, and category
+  goals.
+- Windows/macOS **hosts-file** writes are atomic; the delayed force-kill is
+  guarded against PID reuse; Windows audio detection reuses its COM enumerator;
+  macOS drains autoreleased objects each tick; startup no longer panics on a
+  missing data dir or tray icon.
+
+### Security
+
+- CSV export neutralizes spreadsheet **formula injection** from window titles.
+- Website block patterns are validated as bare hostnames (no hosts-file line
+  injection under elevation).
+- File import/export/backup commands enforce an extension allow-list.
+- Database migrations run in a single transaction and stamp a schema version.
+
 ## [0.5.0] - 2026-08-12 - Cross-platform parity: Wayland, hard-kill, custom categories
 
 A large release built with the community during Social Summer of Code 2026.
