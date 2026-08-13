@@ -50,17 +50,6 @@
         Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Square71x71Logo="Assets\Square71x71Logo.png" />
       </uap:VisualElements>
-      <Extensions>
-        <!--
-          Start-on-login for the packaged app. Disabled by default; the app can
-          flip it on at runtime via the Windows StartupTask API. (The default
-          tauri-plugin-autostart registry method is virtualized under MSIX and
-          does not take effect, so the packaged edition should drive this task.)
-        -->
-        <desktop:Extension Category="windows.startupTask" Executable="system-trace.exe" EntryPoint="Windows.FullTrustApplication">
-          <desktop:StartupTask TaskId="SystemTraceStartup" Enabled="false" DisplayName="System Trace" />
-        </desktop:Extension>
-      </Extensions>
     </Application>
   </Applications>
 
