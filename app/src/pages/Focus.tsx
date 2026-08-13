@@ -18,6 +18,7 @@ import {
   getBlockRules,
   getFocusState,
   getLimits,
+  isStoreBuild,
   listFocusSessions,
   removeBlockRule,
   removeLimit,
@@ -83,6 +84,10 @@ export function Focus() {
   const [ruleKind, setRuleKind] = useState<BlockKind>("app");
   const [rulePattern, setRulePattern] = useState("");
   const [blockMsg, setBlockMsg] = useState("");
+  // In the Microsoft Store edition, system-wide website blocking is compiled
+  // out (it edits the hosts file and needs admin rights, which Store policy
+  // disallows). We keep the controls visible but disabled, with a note.
+  const [storeBuild, setStoreBuild] = useState(false);
 
   useEffect(() => {
     getFocusState().then(setFocus).catch(() => {});
@@ -90,6 +95,7 @@ export function Focus() {
     getApps().then(setApps).catch(() => {});
     getBlockRules().then(setRules).catch(() => {});
     listFocusSessions(8).then(setRecentSessions).catch(() => {});
+    isStoreBuild().then(setStoreBuild).catch(() => {});
   }, []);
 
   // Tick the countdown every second while a focus session is running so the
@@ -525,22 +531,33 @@ export function Focus() {
             <button
               type="button"
               onClick={applyBlock}
-              className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2"
+              disabled={storeBuild}
+              className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface"
             >
               <Globe className="h-4 w-4" aria-hidden /> {t("focus.apply_now", "Apply now")}
             </button>
             <button
               type="button"
               onClick={clearBlock}
-              className="rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2"
+              disabled={storeBuild}
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-body-strong text-text hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface"
             >
               {t("focus.clear_now", "Clear now")}
             </button>
             {blockMsg && <span className="text-label text-text-muted">{blockMsg}</span>}
           </div>
-          <p className="mt-3 text-label text-text-muted">
-            {t("focus.block_desc", "App rules nudge you when a blocked app is in front during focus mode. System-wide website blocking edits the hosts file (requires running System Trace as administrator) and now follows each rule's schedule automatically - blocks apply when a window opens and clear when it ends. The buttons above just force an immediate sync; a \"Clear now\" will re-apply within seconds if a rule is still enabled and in its active window.")}
-          </p>
+          {storeBuild ? (
+            <p className="mt-3 text-label text-text-muted">
+              {t(
+                "focus.block_store_note",
+                "App rules still nudge you when a blocked app is in front during focus mode. System-wide website blocking is not available in the Microsoft Store edition, because it needs administrator rights to edit the system hosts file. Download the full version from system-trace.pages.dev to block websites.",
+              )}
+            </p>
+          ) : (
+            <p className="mt-3 text-label text-text-muted">
+              {t("focus.block_desc", "App rules nudge you when a blocked app is in front during focus mode. System-wide website blocking edits the hosts file (requires running System Trace as administrator) and now follows each rule's schedule automatically - blocks apply when a window opens and clear when it ends. The buttons above just force an immediate sync; a \"Clear now\" will re-apply within seconds if a rule is still enabled and in its active window.")}
+            </p>
+          )}
         </Card>
       </div>
     </div>

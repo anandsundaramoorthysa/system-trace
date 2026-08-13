@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest template for the Microsoft Store (Path A: free, Microsoft-signed).
+  This is a FULL-TRUST packaged desktop app (EntryPoint Windows.FullTrustApplication
+  + runFullTrust capability) so foreground-window tracking works normally - it is
+  NOT the restricted UWP AppContainer sandbox.
+
+  The three __PLACEHOLDER__ identity values below MUST match exactly what Partner
+  Center assigns after you reserve the app name (Product -> Product management ->
+  Product identity). pack.ps1 substitutes them:
+    __IDENTITY_NAME__          = "Package/Identity/Name"          (e.g. 1234Publisher.SystemTrace)
+    __PUBLISHER__              = "Package/Identity/Publisher"     (e.g. CN=XXXXXXXX-....)
+    __PUBLISHER_DISPLAY_NAME__ = "Package/Properties/PublisherDisplayName"
+    __VERSION__                = four-part version, revision 0    (e.g. 0.5.0.0)
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap desktop rescap">
+
+  <Identity
+    Name="__IDENTITY_NAME__"
+    Publisher="__PUBLISHER__"
+    Version="__VERSION__"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>System Trace</DisplayName>
+    <PublisherDisplayName>__PUBLISHER_DISPLAY_NAME__</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="SystemTrace" Executable="system-trace.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="System Trace"
+        Description="Privacy-first, local-first, cross-platform screen-time tracker. All activity data stays on your computer."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Square71x71Logo="Assets\Square71x71Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!--
+          Start-on-login for the packaged app. Disabled by default; the app can
+          flip it on at runtime via the Windows StartupTask API. (The default
+          tauri-plugin-autostart registry method is virtualized under MSIX and
+          does not take effect, so the packaged edition should drive this task.)
+        -->
+        <desktop:Extension Category="windows.startupTask" Executable="system-trace.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="SystemTraceStartup" Enabled="false" DisplayName="System Trace" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

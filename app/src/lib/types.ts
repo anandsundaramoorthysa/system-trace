@@ -581,6 +581,8 @@ export const COMMAND = {
   // Phase 4: system-wide website blocking (gated; needs admin)
   APPLY_WEBSITE_BLOCK: "apply_website_block",
   CLEAR_WEBSITE_BLOCK: "clear_website_block",
+  // True in the Microsoft Store edition, where website blocking is compiled out.
+  IS_STORE_BUILD: "is_store_build",
 } as const;
 
 export type CommandName = (typeof COMMAND)[keyof typeof COMMAND];
@@ -766,5 +768,9 @@ export interface CommandMap {
   [COMMAND.CLEAR_WEBSITE_BLOCK]: {
     args: Record<string, never>;
     result: void;
+  };
+  [COMMAND.IS_STORE_BUILD]: {
+    args: Record<string, never>;
+    result: boolean;
   };
 }
