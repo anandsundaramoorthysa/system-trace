@@ -194,6 +194,10 @@ pub fn prune_corrupt_snapshots(enc_path: &Path, keep: usize) -> DbResult<()> {
 
 /// Idempotent schema creation. Versioned via the `setting` table.
 pub fn migrate(conn: &Connection) -> DbResult<()> {
+    // Run the whole migration atomically so a failure part-way through (a bad
+    // ALTER, seeding, etc.) can never leave a half-created / half-seeded, un-
+    // versioned database.
+    let tx = conn.unchecked_transaction().map_err(map_err)?;
     conn.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS category (
@@ -313,6 +317,11 @@ pub fn migrate(conn: &Connection) -> DbResult<()> {
         [],
     )
     .map_err(map_err)?;
+    // Also stamp PRAGMA user_version, giving future numbered migrations a real
+    // integer to branch on (the setting row is kept for backward compatibility).
+    conn.pragma_update(None, "user_version", 1i64)
+        .map_err(map_err)?;
+    tx.commit().map_err(map_err)?;
     Ok(())
 }
 

@@ -539,7 +539,7 @@ export function Settings() {
         />
         <Row
           title={t("settings.backup_restore", "Backup and restore")}
-          description={t("settings.backup_restore_desc", "A full snapshot of your local database. Restore replaces current data.")}
+          description={t("settings.backup_restore_desc", "A full snapshot of your local database. The backup file is NOT encrypted, so keep it somewhere safe. Restore replaces current data.")}
           control={
             <div className="flex gap-2">
               <button
