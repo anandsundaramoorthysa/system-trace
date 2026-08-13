@@ -31,10 +31,10 @@ pwsh app/src-tauri/msix/pack.ps1 `
   -IdentityName        "<Package/Identity/Name from Partner Center>" `
   -Publisher           "<Package/Identity/Publisher from Partner Center>" `
   -PublisherDisplayName "Anand Sundaramoorthy SA" `
-  -Version             "0.5.0.0"
+  -Version             "0.5.1.0"
 ```
 
-Output: `app/src-tauri/target/msix/SystemTrace_0.5.0.0.msix` ← **upload this**
+Output: `app/src-tauri/target/msix/SystemTrace_0.5.1.0.msix` ← **upload this**
 (unsigned; the Store signs it). The packaging scaffolding lives in
 `app/src-tauri/msix/` (`AppxManifest.xml` + `pack.ps1`); the tile/logo assets
 are the ones Tauri already generates under `app/src-tauri/icons/`.
@@ -73,7 +73,7 @@ Once you paste those into `pack.ps1`, the produced `.msix` is submission-ready.
 |---|---|
 | Product name | System Trace |
 | Publisher display name | Anand Sundaramoorthy SA |
-| Version | 0.5.0 (MSIX uses 0.5.0.0; keep the 4th part 0 — Store reserves it) |
+| Version | 0.5.0 (MSIX uses 0.5.1.0; keep the 4th part 0 — Store reserves it) |
 | Category | Utilities & tools |
 | Short description | Privacy-first screen-time tracker. |
 | Long description | System Trace is a privacy-first, local-first, cross-platform screen-time tracker. All activity data stays on your computer. |
@@ -108,7 +108,7 @@ locally with the Windows App Certification Kit (needs an **elevated** session):
 & "C:\Program Files (x86)\Windows Kits\10\App Certification Kit\appcert.exe" reset
 & "C:\Program Files (x86)\Windows Kits\10\App Certification Kit\appcert.exe" test `
   -apptype appx `
-  -packagefullpath "app\src-tauri\target\msix\SystemTrace_0.5.0.0.msix" `
+  -packagefullpath "app\src-tauri\target\msix\SystemTrace_0.5.1.0.msix" `
   -reportoutputpath "wack-report.xml"
 ```
 
@@ -117,7 +117,7 @@ locally with the Windows App Certification Kit (needs an **elevated** session):
 ## 6. Submission steps (Partner Center)
 
 1. **Apps and games → System Trace → Start your submission.**
-2. **Packages** → upload `SystemTrace_0.5.0.0.msix`. (Partner Center validates
+2. **Packages** → upload `SystemTrace_0.5.1.0.msix`. (Partner Center validates
    the identity matches the reserved app.)
 3. **Store listing** → description, screenshots, category, search terms.
 4. **Privacy policy URL** → the link above (required — submission blocks without it).

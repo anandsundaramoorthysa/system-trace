@@ -34,7 +34,7 @@ param(
   # Package/Properties/PublisherDisplayName from Partner Center.
   [string]$PublisherDisplayName = "ANAND SUNDARAMOORTHY SA",
   # Four-part version; the Store reserves the 4th (revision) part, keep it 0.
-  [string]$Version = "0.5.0.0",
+  [string]$Version = "0.5.1.0",
   # Sign with a throwaway cert for local install testing (never for submission).
   [switch]$SelfSign
 )
