@@ -351,6 +351,20 @@ mod runtime {
         }
     }
 
+    /// Whether an app `key` (lowercased) matches a user block `pattern`
+    /// (lowercased). Matches the entire key or a whole alphanumeric token of it,
+    /// so "chrome" matches "chrome.exe" / "google chrome" but "co" does NOT match
+    /// "code" (the previous substring match blocked unrelated apps).
+    pub(crate) fn app_block_matches(key_lower: &str, pat_lower: &str) -> bool {
+        if pat_lower.is_empty() {
+            return false;
+        }
+        key_lower == pat_lower
+            || key_lower
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|tok| tok == pat_lower)
+    }
+
     pub(crate) fn enforce_hard_limit(
         limit: &crate::models::LimitView,
         active_win: Option<&platform::ActiveWindow>,
@@ -448,6 +462,11 @@ mod runtime {
                 // in-force set actually changes (None = feature unused / nothing
                 // written by us).
                 let mut applied_web_block: Option<Vec<String>> = None;
+                // The last desired hosts state that FAILED to apply (e.g. a
+                // cancelled/absent pkexec elevation). We remember it so a failure
+                // is not retried every tick - which would spam the auth prompt;
+                // we retry only once the desired set actually changes.
+                let mut failed_web_block: Option<Option<Vec<String>>> = None;
                 // Last app we stored an executable path for (icon extraction),
                 // so we only attempt the write once per app appearance.
                 let mut last_path_app: Option<String> = None;
@@ -714,8 +733,12 @@ mod runtime {
                             }
                         }
 
-                        // Refresh block patterns and collect newly-exceeded limits.
+                        // Refresh block patterns and collect exceeded limits under
+                        // the DB lock, then RELEASE the lock before terminating any
+                        // process or showing notifications, so command handlers /
+                        // the UI don't stall while a hard limit is enforced.
                         let mut newly_exceeded: Vec<crate::models::LimitView> = Vec::new();
+                        let mut exceeded_limits: Vec<crate::models::LimitView> = Vec::new();
                         if let Ok(c) = db.lock() {
                             block_patterns = db::enabled_app_block_patterns(&c).unwrap_or_default();
                             if let Ok(limits) = db::get_limits(&c) {
@@ -727,58 +750,59 @@ mod runtime {
                                             fired_limits.insert(l.app_id);
                                             newly_exceeded.push(l.clone());
                                         }
-
-                                        // Hard enforcement: terminate the process
-                                        if let Some(res) = enforce_hard_limit(
-                                            &l,
-                                            active_win.as_ref(),
-                                            &mut failed_terminations,
-                                            terminator.as_ref(),
-                                        ) {
-                                            match res {
-                                                Ok(_) => {
-                                                    let _ = app
-                                                        .notification()
-                                                        .builder()
-                                                        .title("App terminated")
-                                                        .body(format!(
-                                                            "{} was closed because it reached its daily limit.",
-                                                            l.display_name
-                                                        ))
-                                                        .show();
-                                                }
-                                                Err(e) => {
-                                                    match e {
-                                                        platform::TerminateError::NoSuchProcess => {
-                                                            log::info!("Attempted to terminate PID for {} but process was already dead.", l.display_name);
-                                                        }
-                                                        platform::TerminateError::PermissionDenied => {
-                                                            let _ = app
-                                                                .notification()
-                                                                .builder()
-                                                                .title("Limit Enforcement Failed")
-                                                                .body(format!(
-                                                                    "Permission denied. Could not terminate {}.",
-                                                                    l.display_name
-                                                                ))
-                                                                .show();
-                                                        }
-                                                        platform::TerminateError::Other(msg) => {
-                                                            let _ = app
-                                                                .notification()
-                                                                .builder()
-                                                                .title("Limit Enforcement Failed")
-                                                                .body(format!(
-                                                                    "Could not terminate {}: {}",
-                                                                    l.display_name, msg
-                                                                ))
-                                                                .show();
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        exceeded_limits.push(l);
                                     }
+                                }
+                            }
+                        }
+                        // DB lock is now released. Hard enforcement (terminate) and
+                        // its notifications run outside the lock.
+                        for l in &exceeded_limits {
+                            if let Some(res) = enforce_hard_limit(
+                                l,
+                                active_win.as_ref(),
+                                &mut failed_terminations,
+                                terminator.as_ref(),
+                            ) {
+                                match res {
+                                    Ok(_) => {
+                                        let _ = app
+                                            .notification()
+                                            .builder()
+                                            .title("App terminated")
+                                            .body(format!(
+                                                "{} was closed because it reached its daily limit.",
+                                                l.display_name
+                                            ))
+                                            .show();
+                                    }
+                                    Err(e) => match e {
+                                        platform::TerminateError::NoSuchProcess => {
+                                            log::info!("Attempted to terminate PID for {} but process was already dead.", l.display_name);
+                                        }
+                                        platform::TerminateError::PermissionDenied => {
+                                            let _ = app
+                                                .notification()
+                                                .builder()
+                                                .title("Limit Enforcement Failed")
+                                                .body(format!(
+                                                    "Permission denied. Could not terminate {}.",
+                                                    l.display_name
+                                                ))
+                                                .show();
+                                        }
+                                        platform::TerminateError::Other(msg) => {
+                                            let _ = app
+                                                .notification()
+                                                .builder()
+                                                .title("Limit Enforcement Failed")
+                                                .body(format!(
+                                                    "Could not terminate {}: {}",
+                                                    l.display_name, msg
+                                                ))
+                                                .show();
+                                        }
+                                    },
                                 }
                             }
                         }
@@ -824,7 +848,7 @@ mod runtime {
                                 let kl = key.to_lowercase();
                                 if block_patterns
                                     .iter()
-                                    .any(|p| kl.contains(&p.to_lowercase()))
+                                    .any(|p| app_block_matches(&kl, &p.to_lowercase()))
                                 {
                                     let name = cur_name.clone().unwrap_or_else(|| key.clone());
                                     let _ = app.emit(
@@ -850,20 +874,33 @@ mod runtime {
                         if let Some((in_use, mut in_force)) = web_state {
                             in_force.sort();
                             let desired = if in_use { Some(in_force) } else { None };
-                            let need_action = match (&desired, &applied_web_block) {
+                            let changed = match (&desired, &applied_web_block) {
                                 (Some(d), Some(a)) => d != a,
                                 (Some(_), None) => true,
                                 (None, Some(_)) => true,
                                 (None, None) => false,
                             };
+                            // Skip a desired state that just failed, so we don't
+                            // re-trigger elevation every tick; retry only when it
+                            // differs from the last failed attempt (i.e. the rule
+                            // set changed).
+                            let need_action = changed && failed_web_block.as_ref() != Some(&desired);
                             if need_action {
                                 let res = match &desired {
                                     Some(domains) => crate::blocker::apply(domains).map(|_| ()),
                                     None => crate::blocker::clear(),
                                 };
                                 match res {
-                                    Ok(()) => applied_web_block = desired,
-                                    Err(e) => log::warn!("website block sync failed: {e}"),
+                                    Ok(()) => {
+                                        applied_web_block = desired;
+                                        failed_web_block = None;
+                                    }
+                                    Err(e) => {
+                                        log::warn!(
+                                            "website block sync failed (will retry when the rule set changes): {e}"
+                                        );
+                                        failed_web_block = Some(desired);
+                                    }
                                 }
                             }
                         }
@@ -897,6 +934,20 @@ pub use runtime::spawn;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_block_matches_is_token_precise() {
+        use super::runtime::app_block_matches;
+        // Whole-token / exact matches block correctly.
+        assert!(app_block_matches("chrome.exe", "chrome"));
+        assert!(app_block_matches("google chrome", "chrome"));
+        assert!(app_block_matches("code", "code"));
+        assert!(app_block_matches("com.apple.safari", "safari"));
+        // The old substring bug: a short pattern must NOT match unrelated apps.
+        assert!(!app_block_matches("code", "co"));
+        assert!(!app_block_matches("chrome.exe", "rom"));
+        assert!(!app_block_matches("anything", ""));
+    }
 
     fn win(app: &str, title: Option<&str>) -> ActiveWindow {
         ActiveWindow {

@@ -34,14 +34,30 @@ pub fn load_or_create_key(fallback_path: &Path, data_exists: bool) -> Result<[u8
         // The key is in the OS store - the normal path.
         Ok(Some(k)) => Ok(k),
 
-        // The store works but holds no entry. This is genuine: either a fresh
-        // install, or an upgrade from a build whose key didn't persist. Either
-        // way the key is gone, so any existing snapshot is unrecoverable - we
-        // mint a fresh (now-persistent) key and let the caller quarantine the
-        // old snapshot and start fresh. Bricking the app would be worse.
+        // The store works but holds no entry. A durable key-file copy is always
+        // written alongside the keyring (see `create_and_store`), so try it
+        // first - that is the normal recovery when the OS credential store
+        // loses the entry (login-password change, keychain reset, profile
+        // rebuild). If it too is missing AND encrypted data already exists, the
+        // key is genuinely gone: minting a new one would make that data
+        // permanently undecryptable, so we FAIL CLOSED instead of silently
+        // wiping months of history. A new key is only created for a genuinely
+        // fresh install (no data, no key anywhere).
         Ok(None) => {
             if let Some(k) = read_key_file(fallback_path) {
+                // Re-seed the keyring so it holds the key again next launch.
+                let _ = keyring_set(&k);
                 return Ok(k);
+            }
+            if data_exists {
+                return Err(
+                    "the database encryption key is missing from the OS secure store \
+                     and no key backup was found, but your encrypted data still exists. \
+                     To avoid destroying it, System Trace will not create a new key. If \
+                     your keychain/credential store was reset, restore it (or restore a \
+                     System Trace backup) and launch again."
+                        .to_string(),
+                );
             }
             Ok(create_and_store(fallback_path))
         }
@@ -67,23 +83,36 @@ pub fn load_or_create_key(fallback_path: &Path, data_exists: bool) -> Result<[u8
 
 fn read_key_file(path: &Path) -> Option<[u8; 32]> {
     let bytes = std::fs::read(path).ok()?;
+    // Current format: OS-protected blob (DPAPI on Windows; raw on Unix).
+    if let Some(raw) = unprotect(&bytes) {
+        if raw.len() == 32 {
+            let mut k = [0u8; 32];
+            k.copy_from_slice(&raw);
+            return Some(k);
+        }
+    }
+    // Legacy format: a raw 32-byte key written by older builds (the file
+    // fallback used to be plaintext). Accept it so existing installs still
+    // open; it is rewritten in the protected format on the next create/store.
     if bytes.len() == 32 {
         let mut k = [0u8; 32];
         k.copy_from_slice(&bytes);
-        Some(k)
-    } else {
-        None
+        return Some(k);
     }
+    None
 }
 
 fn create_and_store(fallback_path: &Path) -> [u8; 32] {
     let mut key = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut key);
-    // Prefer the OS keyring; only fall back to a restricted file if it fails,
-    // so the key still persists across restarts either way.
-    if !keyring_set(&key) {
-        let _ = write_key_file(fallback_path, &key);
-    }
+    // Store in the OS keyring (primary) AND always write a durable, OS-protected
+    // key-file copy. Keeping a second copy is deliberate: the OS credential
+    // store losing its entry over time is the leading cause of "my data
+    // vanished after months", and a keyring-only design has no recovery. The
+    // file is not a plaintext downgrade - it is DPAPI-protected on Windows and
+    // mode-0600 on Unix (see `write_key_file`).
+    let _ = keyring_set(&key);
+    let _ = write_key_file(fallback_path, &key);
     key
 }
 
@@ -117,13 +146,83 @@ fn write_key_file(path: &Path, key: &[u8; 32]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    std::fs::write(path, key)?;
+    // Protect the key at rest: DPAPI (bound to the current Windows user) so a
+    // copy of the file is useless on another machine/account; raw bytes on Unix
+    // where the 0600 permission below is the protection.
+    let blob =
+        protect(key).ok_or_else(|| std::io::Error::other("could not protect key material"))?;
+    std::fs::write(path, &blob)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
     }
     Ok(())
+}
+
+/// OS-level protection for the durable key file. On Windows this is DPAPI (the
+/// blob is bound to the current user account and machine); elsewhere the key is
+/// stored as-is and protected by the 0600 permission + user-owned data dir.
+#[cfg(target_os = "windows")]
+fn protect(data: &[u8]) -> Option<Vec<u8>> {
+    dpapi::crypt_protect(data)
+}
+#[cfg(target_os = "windows")]
+fn unprotect(data: &[u8]) -> Option<Vec<u8>> {
+    dpapi::crypt_unprotect(data)
+}
+#[cfg(not(target_os = "windows"))]
+fn protect(data: &[u8]) -> Option<Vec<u8>> {
+    Some(data.to_vec())
+}
+#[cfg(not(target_os = "windows"))]
+fn unprotect(data: &[u8]) -> Option<Vec<u8>> {
+    Some(data.to_vec())
+}
+
+/// DPAPI (`CryptProtectData`/`CryptUnprotectData`) wrappers. Encrypts key
+/// material to the current user so the on-disk key file is unusable if copied
+/// off the machine or read by another account.
+#[cfg(target_os = "windows")]
+mod dpapi {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{LocalFree, HLOCAL};
+    use windows::Win32::Security::Cryptography::{
+        CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
+    };
+
+    fn in_blob(data: &[u8]) -> CRYPT_INTEGER_BLOB {
+        CRYPT_INTEGER_BLOB {
+            cbData: data.len() as u32,
+            pbData: data.as_ptr() as *mut u8,
+        }
+    }
+
+    // Copy the LocalAlloc'd output into an owned Vec, then free the OS buffer.
+    fn take(out: CRYPT_INTEGER_BLOB) -> Vec<u8> {
+        let v = unsafe { std::slice::from_raw_parts(out.pbData, out.cbData as usize) }.to_vec();
+        unsafe {
+            let _ = LocalFree(HLOCAL(out.pbData as *mut _));
+        }
+        v
+    }
+
+    pub fn crypt_protect(data: &[u8]) -> Option<Vec<u8>> {
+        let input = in_blob(data);
+        let mut output = CRYPT_INTEGER_BLOB::default();
+        let ok =
+            unsafe { CryptProtectData(&input, PCWSTR::null(), None, None, None, 0, &mut output) };
+        ok.ok()?;
+        Some(take(output))
+    }
+
+    pub fn crypt_unprotect(data: &[u8]) -> Option<Vec<u8>> {
+        let input = in_blob(data);
+        let mut output = CRYPT_INTEGER_BLOB::default();
+        let ok = unsafe { CryptUnprotectData(&input, None, None, None, None, 0, &mut output) };
+        ok.ok()?;
+        Some(take(output))
+    }
 }
 
 /// Encrypt a plaintext blob; output is `nonce || ciphertext`.

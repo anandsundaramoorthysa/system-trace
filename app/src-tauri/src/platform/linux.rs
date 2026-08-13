@@ -148,15 +148,39 @@ impl super::ProcessTerminator for LinuxTerminator {
 
         let pid_t = Pid::from_raw(pid as i32);
 
+        // A start-time signature so the delayed SIGKILL can tell this exact
+        // process apart from a later one that reuses the same PID. `ps` is used
+        // (no unsafe FFI); if it's unavailable we fall back to the prior
+        // existence-only check.
+        fn proc_start(pid: u32) -> Option<String> {
+            let out = std::process::Command::new("ps")
+                .args(["-o", "lstart=", "-p", &pid.to_string()])
+                .output()
+                .ok()?;
+            if !out.status.success() {
+                return None;
+            }
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            (!s.is_empty()).then_some(s)
+        }
+        let start = proc_start(pid);
+
         // 1. Send SIGTERM first.
         match kill(pid_t, Signal::SIGTERM) {
             Ok(_) => {
-                // 2. Spawn a background thread to wait and escalate to SIGKILL if still alive.
+                // 2. Escalate to SIGKILL after a grace period, but only if the
+                // process is still alive AND still the same process (so PID reuse
+                // can't make us kill an unrelated program).
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(2000));
-                    // Check if process still exists
                     if kill(pid_t, None).is_ok() {
-                        let _ = kill(pid_t, Signal::SIGKILL);
+                        let same = match &start {
+                            Some(s0) => proc_start(pid).as_deref() == Some(s0.as_str()),
+                            None => true,
+                        };
+                        if same {
+                            let _ = kill(pid_t, Signal::SIGKILL);
+                        }
                     }
                 });
                 Ok(())

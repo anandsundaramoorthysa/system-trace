@@ -97,7 +97,7 @@ pub fn run() {
             let dir = app
                 .path()
                 .app_data_dir()
-                .expect("could not resolve app data dir");
+                .map_err(|e| format!("could not resolve app data dir: {e}"))?;
 
             let db_path = if is_test {
                 std::env::temp_dir().join("system-trace-test.sqlite")
@@ -126,26 +126,49 @@ pub fn run() {
                     Ok(k) => k,
                     Err(e) => return Err(e.into()),
                 };
-                // If the snapshot can't be decrypted/loaded (wrong key or
-                // corruption), quarantine it and start fresh so the app still
-                // launches instead of panicking on every boot.
-                let conn = match db::open_encrypted(&enc_path, &key, &db_path) {
+                // Load the snapshot, distinguishing two very different failures:
+                //   * decrypt/deserialize failure  = the snapshot is corrupt or
+                //     the key is wrong -> quarantine it (kept, never deleted) and
+                //     start fresh, recording a recovery notice so the reset is
+                //     NOT silent.
+                //   * migration failure            = the data loaded fine but a
+                //     schema upgrade failed -> FAIL CLOSED. Never wipe intact
+                //     data; a fixed build recovers it.
+                let conn = match db::load_encrypted_image(&enc_path, &key, &db_path) {
                     Ok(c) => {
-                        let _ = db::prune_corrupt_snapshot(&enc_path);
+                        if let Err(e) = db::migrate(&c) {
+                            return Err(format!(
+                                "your data loaded but a database upgrade failed ({e}). \
+                                 To avoid any risk to your history, System Trace stopped \
+                                 instead of modifying it. Please update the app or seek \
+                                 help - your data is untouched."
+                            )
+                            .into());
+                        }
                         c
                     }
                     Err(e) => {
                         log::error!(
-                            "could not open encrypted database ({e}); quarantining it and starting fresh"
+                            "could not open encrypted snapshot ({e}); quarantining it and starting fresh"
                         );
+                        let mut quarantined: Option<std::path::PathBuf> = None;
                         if enc_path.exists() {
-                            let _ = std::fs::rename(
-                                &enc_path,
-                                enc_path.with_extension("enc.corrupt"),
+                            match db::quarantine_snapshot(&enc_path) {
+                                Ok(p) => quarantined = Some(p),
+                                Err(qe) => log::error!("could not quarantine snapshot: {qe}"),
+                            }
+                        }
+                        let fresh = db::open_encrypted(&enc_path, &key, &db_path)?;
+                        // Record the reset so the UI can surface a (non-silent)
+                        // recovery banner instead of the app appearing to start over.
+                        if let Some(p) = quarantined {
+                            let _ = db::set_setting(
+                                &fresh,
+                                "data_recovery_notice",
+                                &p.to_string_lossy(),
                             );
                         }
-                        db::open_encrypted(&enc_path, &key, &db_path)
-                            .expect("failed to open a fresh database")
+                        fresh
                     }
                 };
                 (conn, Some((enc_path.clone(), key)))
@@ -179,8 +202,15 @@ pub fn run() {
                 settings.tracking_paused
             };
 
+            // Prefer the finer "Idle threshold (seconds)" control; fall back to
+            // the coarser "Idle timeout (minutes)" only when seconds is unset.
+            let idle_ms = if settings.idle_threshold_secs > 0 {
+                settings.idle_threshold_secs as u64 * 1000
+            } else {
+                settings.idle_timeout_mins as u64 * 60 * 1000
+            };
             let shared = Arc::new(Mutex::new(Shared::new(
-                settings.idle_timeout_mins as u64 * 60 * 1000,
+                idle_ms,
                 settings.capture_titles,
                 tracking_paused,
             )));
@@ -284,8 +314,7 @@ pub fn run() {
             let show = MenuItemBuilder::with_id("show", "Show System Trace").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
-            let _tray = TrayIconBuilder::with_id("main")
-                .icon(app.default_window_icon().unwrap().clone())
+            let mut tray_builder = TrayIconBuilder::with_id("main")
                 .tooltip("System Trace")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
@@ -303,8 +332,13 @@ pub fn run() {
                         app.exit(0);
                     }
                     _ => {}
-                })
-                .build(app)?;
+                });
+            // The bundled window icon should always be present; fall back
+            // gracefully rather than panicking the whole app if it isn't.
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            }
+            let _tray = tray_builder.build(app)?;
 
             Ok(())
         })

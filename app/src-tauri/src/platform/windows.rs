@@ -41,6 +41,16 @@ impl Default for WinWatcher {
     }
 }
 
+// Cache the WASAPI device enumerator once per (collector) thread instead of
+// recreating a COM object on every 1s tick. The enumerator is a stable factory;
+// the current default endpoint is still re-queried each call, so audio-device
+// changes are reflected.
+thread_local! {
+    static RENDER_ENUMERATOR: std::cell::RefCell<
+        Option<windows::Win32::Media::Audio::IMMDeviceEnumerator>,
+    > = const { std::cell::RefCell::new(None) };
+}
+
 /// Current output peak level (0.0..=1.0) of the default render endpoint, or
 /// `None` if it can't be read. A non-trivial peak means audio is actually
 /// coming out of the speakers or headset right now (music, a video with sound, a call).
@@ -51,32 +61,39 @@ unsafe fn render_peak() -> Option<f32> {
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
-    let enumerator: IMMDeviceEnumerator =
-        CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+    RENDER_ENUMERATOR.with(|cell| unsafe {
+        let mut slot = cell.borrow_mut();
+        if slot.is_none() {
+            let e: IMMDeviceEnumerator =
+                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+            *slot = Some(e);
+        }
+        let enumerator = slot.as_ref()?;
 
-    let mut max_peak: Option<f32> = None;
+        let mut max_peak: Option<f32> = None;
 
-    // Check default console endpoint (multimedia / speakers)
-    if let Ok(device) = enumerator.GetDefaultAudioEndpoint(eRender, eConsole) {
-        let meter: Result<IAudioMeterInformation, _> = device.Activate(CLSCTX_ALL, None);
-        if let Ok(meter) = meter {
-            if let Ok(peak) = meter.GetPeakValue() {
-                max_peak = Some(peak);
+        // Check default console endpoint (multimedia / speakers)
+        if let Ok(device) = enumerator.GetDefaultAudioEndpoint(eRender, eConsole) {
+            let meter: Result<IAudioMeterInformation, _> = device.Activate(CLSCTX_ALL, None);
+            if let Ok(meter) = meter {
+                if let Ok(peak) = meter.GetPeakValue() {
+                    max_peak = Some(peak);
+                }
             }
         }
-    }
 
-    // Check default communication endpoint (headsets / calls)
-    if let Ok(device) = enumerator.GetDefaultAudioEndpoint(eRender, eCommunications) {
-        let meter: Result<IAudioMeterInformation, _> = device.Activate(CLSCTX_ALL, None);
-        if let Ok(meter) = meter {
-            if let Ok(peak) = meter.GetPeakValue() {
-                max_peak = Some(max_peak.unwrap_or(0.0).max(peak));
+        // Check default communication endpoint (headsets / calls)
+        if let Ok(device) = enumerator.GetDefaultAudioEndpoint(eRender, eCommunications) {
+            let meter: Result<IAudioMeterInformation, _> = device.Activate(CLSCTX_ALL, None);
+            if let Ok(meter) = meter {
+                if let Ok(peak) = meter.GetPeakValue() {
+                    max_peak = Some(max_peak.unwrap_or(0.0).max(peak));
+                }
             }
         }
-    }
 
-    max_peak
+        max_peak
+    })
 }
 
 impl Watcher for WinWatcher {

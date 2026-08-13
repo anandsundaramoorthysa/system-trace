@@ -115,6 +115,24 @@ export function Focus() {
     }
   }, [now, focus?.active, focus?.ends_at_ms]);
 
+  // If a session ended on its own (timer elapsed / backend ended it) while we
+  // still hold its start time, persist it with its note so auto-completed
+  // sessions aren't lost from "Recent sessions". The manual Stop path clears
+  // sessionStart before focus flips inactive, so this never double-saves.
+  useEffect(() => {
+    if (focus && !focus.active && sessionStart != null) {
+      const start = sessionStart;
+      const note = sessionNote;
+      setSessionStart(null);
+      setSessionNote("");
+      saveFocusSession(start, Date.now(), note)
+        .then(() => listFocusSessions(8))
+        .then(setRecentSessions)
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.active, sessionStart]);
+
   async function startSession() {
     setSessionStart(Date.now());
     setFocus(await startFocusSession(sessionMins));
@@ -421,7 +439,7 @@ export function Focus() {
 
       {/* Block rules */}
       <div className="space-y-2">
-        <CardTitle>{t("focus.block_list_title", "Block list (focus mode)")} (focus mode)</CardTitle>
+        <CardTitle>{t("focus.block_list_title", "Block list (focus mode)")}</CardTitle>
         <Card className="p-5">
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <select
@@ -430,7 +448,7 @@ export function Focus() {
               className="rounded-md border border-border bg-bg px-2 py-1.5 text-body text-text"
             >
               <option value="app">{t("focus.rule_kind_app", "App")}</option>
-              <option value={t("focus.rule_kind_web", "Website")}>Website</option>
+              <option value="website">{t("focus.rule_kind_web", "Website")}</option>
             </select>
             <input
               value={rulePattern}

@@ -17,6 +17,10 @@ pub struct X11Watcher {
     /// Whether the X SCREENSAVER extension answered our probe at startup. When
     /// false we have no idle signal at all.
     idle_supported: bool,
+    /// Whether to read window titles. Off by default (privacy); the collector
+    /// turns it on via `set_capture_titles` when the user opts in, so titles are
+    /// not even read from X otherwise.
+    capture_titles: bool,
 }
 
 impl Default for X11Watcher {
@@ -45,6 +49,7 @@ impl X11Watcher {
         X11Watcher {
             conn,
             idle_supported,
+            capture_titles: false,
         }
     }
 
@@ -87,15 +92,20 @@ impl X11Watcher {
             .map(|s| String::from_utf8_lossy(s).into_owned())
             .unwrap_or_else(|| "unknown".to_string());
 
-        // Title via _NET_WM_NAME (UTF8_STRING); best-effort.
-        let title = match (self.atom(b"_NET_WM_NAME"), self.atom(b"UTF8_STRING")) {
-            (Some(name_atom), Some(utf8)) => c
-                .get_property(false, win, name_atom, utf8, 0, 1024)
-                .ok()
-                .and_then(|cookie| cookie.reply().ok())
-                .map(|r| String::from_utf8_lossy(&r.value).into_owned())
-                .filter(|s| !s.is_empty()),
-            _ => None,
+        // Title via _NET_WM_NAME (UTF8_STRING); best-effort, and only when the
+        // user has opted into title capture (so it is not even read otherwise).
+        let title = if self.capture_titles {
+            match (self.atom(b"_NET_WM_NAME"), self.atom(b"UTF8_STRING")) {
+                (Some(name_atom), Some(utf8)) => c
+                    .get_property(false, win, name_atom, utf8, 0, 1024)
+                    .ok()
+                    .and_then(|cookie| cookie.reply().ok())
+                    .map(|r| String::from_utf8_lossy(&r.value).into_owned())
+                    .filter(|s| !s.is_empty()),
+                _ => None,
+            }
+        } else {
+            None
         };
 
         // PID via _NET_WM_PID (CARDINAL); best-effort.
@@ -122,6 +132,10 @@ impl X11Watcher {
 impl Watcher for X11Watcher {
     fn active_window(&mut self) -> Option<ActiveWindow> {
         self.query_active()
+    }
+
+    fn set_capture_titles(&mut self, on: bool) {
+        self.capture_titles = on;
     }
 
     fn idle_ms(&mut self) -> u64 {
