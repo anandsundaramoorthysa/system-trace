@@ -219,6 +219,27 @@ pub fn remove_exclusion(state: State<AppState>, id: i64) -> R<()> {
 
 /* ------------------------------- data commands ---------------------------- */
 
+/// Reject a caller-supplied path whose extension is not in `allowed`. These file
+/// commands receive a path chosen via the native dialog, but the command is
+/// still directly invokable from the webview; enforcing the extension is
+/// defense-in-depth that blocks the worst case (writing an executable/script to
+/// e.g. a Startup folder) should the frontend ever be compromised.
+fn require_ext(path: &str, allowed: &[&str]) -> R<()> {
+    let ok = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| allowed.contains(&e.to_ascii_lowercase().as_str()))
+        .unwrap_or(false);
+    if ok {
+        Ok(())
+    } else {
+        Err(format!(
+            "refusing to use '{path}': expected a {} file",
+            allowed.join(" or ")
+        ))
+    }
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub fn export_data(
     state: State<AppState>,
@@ -227,12 +248,14 @@ pub fn export_data(
     from: Option<String>,
     to: Option<String>,
 ) -> R<ExportResult> {
+    require_ext(&path, &["csv", "json"])?;
     let conn = lock(&state.db)?;
     db::export_data(&conn, format, &path, from.as_deref(), to.as_deref())
 }
 
 #[tauri::command(rename_all = "snake_case")]
 pub fn import_data(state: State<AppState>, path: String) -> R<ImportResult> {
+    require_ext(&path, &["csv", "json"])?;
     let conn = lock(&state.db)?;
     db::import_data(&conn, &path)
 }
@@ -258,6 +281,7 @@ pub fn wipe_all_data(state: State<AppState>) -> R<WipeResult> {
 /// in between a checkpoint and a file copy the way a raw `fs::copy` allowed.
 #[tauri::command(rename_all = "snake_case")]
 pub fn backup_database(state: State<AppState>, path: String) -> R<BackupResult> {
+    require_ext(&path, &["sqlite", "sqlite3", "db", "bak"])?;
     {
         let conn = lock(&state.db)?;
         conn.backup(rusqlite::DatabaseName::Main, &path, None)
@@ -275,6 +299,7 @@ pub fn backup_database(state: State<AppState>, path: String) -> R<BackupResult> 
 /// it is safe and takes effect immediately - no restart, no corruption.
 #[tauri::command(rename_all = "snake_case")]
 pub fn restore_database(state: State<AppState>, path: String) -> R<()> {
+    require_ext(&path, &["sqlite", "sqlite3", "db", "bak"])?;
     // Basic sanity: the file must be a SQLite database (magic header) so we do
     // not feed garbage into the restore.
     let header = {
@@ -384,6 +409,7 @@ pub fn focus_main_window(app: tauri::AppHandle) -> R<()> {
 /// user explicitly pointed it.
 #[tauri::command(rename_all = "snake_case")]
 pub fn save_report_pdf(path: String, bytes: Vec<u8>) -> R<i64> {
+    require_ext(&path, &["pdf"])?;
     std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
     Ok(bytes.len() as i64)
 }

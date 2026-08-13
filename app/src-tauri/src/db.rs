@@ -44,6 +44,23 @@ pub fn open_encrypted(
     key: &[u8; 32],
     legacy_plain: &std::path::Path,
 ) -> DbResult<Connection> {
+    let conn = load_encrypted_image(enc_path, key, legacy_plain)?;
+    migrate(&conn)?;
+    Ok(conn)
+}
+
+/// Load (decrypt + deserialize) the on-disk image into a fresh in-memory
+/// connection, WITHOUT running migrations. Separated from `open_encrypted` so
+/// startup can distinguish a **corrupt/undecryptable snapshot** (this returns
+/// `Err`) from a **migration failure on otherwise-intact data** (`migrate`
+/// returns `Err`). The two must be handled very differently: a corrupt snapshot
+/// may be quarantined and the app started fresh, but a migration failure must
+/// NOT wipe intact data - it fails closed and is recoverable by a fixed build.
+pub fn load_encrypted_image(
+    enc_path: &std::path::Path,
+    key: &[u8; 32],
+    legacy_plain: &std::path::Path,
+) -> DbResult<Connection> {
     let mut conn = Connection::open_in_memory().map_err(map_err)?;
     if enc_path.exists() {
         let blob = std::fs::read(enc_path).map_err(map_err)?;
@@ -59,7 +76,6 @@ pub fn open_encrypted(
     }
     conn.pragma_update(None, "foreign_keys", "ON")
         .map_err(map_err)?;
-    migrate(&conn)?;
     Ok(conn)
 }
 
@@ -80,14 +96,18 @@ fn deserialize_into(conn: &mut Connection, bytes: &[u8]) -> DbResult<()> {
     Ok(())
 }
 
-/// Write an encrypted snapshot of the in-memory database to `enc_path`. Atomic:
-/// writes a temp sibling then renames over the target so a crash mid-write can
-/// never leave a half-written (unreadable) snapshot.
+/// Write an encrypted snapshot of the in-memory database to `enc_path`. Atomic
+/// AND durable: writes a temp sibling, `fsync`s it, then renames over the
+/// target, then `fsync`s the directory. Without the fsyncs a power loss can
+/// commit the rename while the temp file's data blocks are still unflushed,
+/// leaving a present-but-torn (unreadable) snapshot - which on next launch
+/// looks exactly like data loss.
 pub fn snapshot_encrypted(
     conn: &Connection,
     enc_path: &std::path::Path,
     key: &[u8; 32],
 ) -> DbResult<()> {
+    use std::io::Write;
     let data = conn
         .serialize(rusqlite::DatabaseName::Main)
         .map_err(map_err)?;
@@ -96,20 +116,79 @@ pub fn snapshot_encrypted(
         std::fs::create_dir_all(dir).map_err(map_err)?;
     }
     let tmp = enc_path.with_extension("enc.tmp");
-    std::fs::write(&tmp, &blob).map_err(map_err)?;
+    {
+        let mut f = std::fs::File::create(&tmp).map_err(map_err)?;
+        f.write_all(&blob).map_err(map_err)?;
+        f.sync_all().map_err(map_err)?; // durable before the rename
+    }
     std::fs::rename(&tmp, enc_path).map_err(map_err)?;
+    // Best-effort: fsync the directory so the rename itself is durable. This is
+    // meaningful on Unix; on Windows opening a directory as a file is not
+    // supported, so it is simply skipped (MoveFileEx already orders the rename).
+    #[cfg(unix)]
+    if let Some(dir) = enc_path.parent() {
+        if let Ok(d) = std::fs::File::open(dir) {
+            let _ = d.sync_all();
+        }
+    }
     Ok(())
 }
 
-/// Remove a stale quarantined snapshot left behind from a
-/// previous recovery.
-pub fn prune_corrupt_snapshot(enc_path: &Path) -> DbResult<()> {
-    let corrupt = enc_path.with_extension("enc.corrupt");
-
-    if corrupt.exists() {
-        std::fs::remove_file(&corrupt).map_err(map_err)?;
+/// Move a snapshot that could not be opened aside for possible manual recovery,
+/// using a timestamped name so repeated failures never overwrite an earlier
+/// quarantined copy. Returns the path it was moved to. Quarantined snapshots are
+/// **never auto-deleted** - the user's only ciphertext copy of their data must
+/// not be destroyed automatically.
+pub fn quarantine_snapshot(enc_path: &Path) -> DbResult<std::path::PathBuf> {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    // Ensure a unique destination even if two quarantines land in the same
+    // millisecond, so an earlier quarantined copy is never overwritten.
+    let mut dest = enc_path.with_extension(format!("enc.corrupt-{ts}"));
+    let mut n = 1u32;
+    while dest.exists() {
+        dest = enc_path.with_extension(format!("enc.corrupt-{ts}-{n}"));
+        n += 1;
     }
+    std::fs::rename(enc_path, &dest).map_err(map_err)?;
+    Ok(dest)
+}
 
+/// Remove quarantined snapshots, keeping the most recent `keep`. Intended for an
+/// explicit user-initiated "clear old backups" action - it is NOT called
+/// automatically on boot (that auto-deletion was the cause of permanent,
+/// unrecoverable data loss after a spurious corruption).
+pub fn prune_corrupt_snapshots(enc_path: &Path, keep: usize) -> DbResult<()> {
+    let dir = match enc_path.parent() {
+        Some(d) => d,
+        None => return Ok(()),
+    };
+    let stem = enc_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("system-trace.enc");
+    let mut quarantined: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+        .map_err(map_err)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| {
+                    n.starts_with(&format!("{stem}.corrupt"))
+                        || n.starts_with(&format!("{stem}.corrupt-"))
+                })
+                .unwrap_or(false)
+        })
+        .collect();
+    // Timestamped names sort chronologically; drop the oldest beyond `keep`.
+    quarantined.sort();
+    if quarantined.len() > keep {
+        for p in &quarantined[..quarantined.len() - keep] {
+            let _ = std::fs::remove_file(p);
+        }
+    }
     Ok(())
 }
 
@@ -1323,11 +1402,43 @@ pub fn get_goal_streaks(conn: &Connection) -> DbResult<Vec<GoalStreak>> {
 }
 
 fn csv_escape(s: &str) -> String {
-    if s.contains([',', '"', '\n']) {
-        format!("\"{}\"", s.replace('"', "\"\""))
+    // Neutralize spreadsheet formula injection: a leading =, +, -, @, tab or CR
+    // makes Excel/LibreOffice interpret the cell as a formula. Fields such as
+    // the window `title` are captured from other processes, so they are
+    // attacker-influenced (an app can name its window `=cmd|'/c calc'!A1`).
+    // Prefix such fields with an apostrophe and always quote them so they are
+    // read as literal text.
+    let formula = s.starts_with(['=', '+', '-', '@', '\t', '\r']);
+    let body = if formula {
+        format!("'{s}")
     } else {
         s.to_string()
+    };
+    if formula || body.contains([',', '"', '\n']) {
+        format!("\"{}\"", body.replace('"', "\"\""))
+    } else {
+        body
     }
+}
+
+/// Conservative hostname validation for website block-rule patterns: dot-
+/// separated labels of ASCII letters/digits/hyphen, no whitespace or control
+/// characters, bounded length. Rejecting anything else stops a crafted pattern
+/// (e.g. one containing a newline) from injecting arbitrary lines into the
+/// system hosts file when the block is applied with elevation.
+pub fn is_valid_domain(d: &str) -> bool {
+    let d = d.trim();
+    if d.is_empty() || d.len() > 253 {
+        return false;
+    }
+    d.split('.').all(|label| {
+        let b = label.as_bytes();
+        !b.is_empty()
+            && b.len() <= 63
+            && b[0] != b'-'
+            && b[b.len() - 1] != b'-'
+            && b.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'-')
+    })
 }
 
 pub fn export_data(
@@ -1523,6 +1634,16 @@ pub fn get_block_rules(conn: &Connection) -> DbResult<Vec<BlockRule>> {
 }
 
 pub fn set_block_rule(conn: &Connection, input: &BlockRuleInput) -> DbResult<BlockRule> {
+    // A website rule's pattern is written into the system hosts file with
+    // elevation, so it must be a bare hostname - reject anything else here so a
+    // crafted value can never inject arbitrary host mappings.
+    if matches!(input.kind, BlockKind::Website) && !is_valid_domain(&input.pattern) {
+        return Err(
+            "please enter a valid website domain (e.g. example.com) - no spaces, paths, \
+             or protocol."
+                .to_string(),
+        );
+    }
     let id = match input.id {
         Some(id) => {
             conn.execute(
@@ -2011,20 +2132,63 @@ mod tests {
     }
 
     #[test]
-    fn prune_corrupt_snapshot_removes_stale_quarantine() {
-        let base = std::env::temp_dir().join(format!("st-prune-test-{}", std::process::id()));
+    fn quarantine_keeps_snapshots_and_prune_keeps_newest() {
+        let dir = std::env::temp_dir().join(format!("st-quarantine-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let enc = dir.join("system-trace.enc");
 
-        let corrupt = base.with_extension("enc.corrupt");
+        // Quarantine moves the snapshot aside (kept, not deleted).
+        std::fs::write(&enc, b"corrupt-1").unwrap();
+        let q1 = quarantine_snapshot(&enc).unwrap();
+        assert!(!enc.exists(), "original snapshot moved away");
+        assert!(q1.exists(), "quarantined copy is kept, not deleted");
 
-        let _ = std::fs::remove_file(&corrupt);
+        // A second corruption is quarantined under a distinct name.
+        std::fs::write(&enc, b"corrupt-2").unwrap();
+        let q2 = quarantine_snapshot(&enc).unwrap();
+        assert_ne!(q1, q2, "quarantines never overwrite each other");
+        assert!(q1.exists() && q2.exists());
 
-        std::fs::write(&corrupt, b"old").unwrap();
+        // Explicit prune keeps only the newest N.
+        prune_corrupt_snapshots(&enc, 1).unwrap();
+        let remaining = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.contains(".enc.corrupt"))
+                    .unwrap_or(false)
+            })
+            .count();
+        assert_eq!(remaining, 1, "prune keeps only the newest quarantine");
 
-        assert!(corrupt.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
-        prune_corrupt_snapshot(&base).unwrap();
+    #[test]
+    fn is_valid_domain_accepts_hosts_and_rejects_injection() {
+        assert!(is_valid_domain("example.com"));
+        assert!(is_valid_domain("sub.example.co.uk"));
+        assert!(is_valid_domain("a-b.example.com"));
+        assert!(!is_valid_domain(""));
+        assert!(!is_valid_domain("has space.com"));
+        // The core injection case: a newline would add arbitrary hosts lines.
+        assert!(!is_valid_domain("x.com\n0.0.0.0 update.microsoft.com"));
+        assert!(!is_valid_domain("-bad.com"));
+        assert!(!is_valid_domain("bad-.com"));
+        assert!(!is_valid_domain("http://example.com"));
+    }
 
-        assert!(!corrupt.exists());
+    #[test]
+    fn csv_escape_neutralizes_formula_injection() {
+        assert_eq!(csv_escape("=cmd|'/c calc'!A1"), "\"'=cmd|'/c calc'!A1\"");
+        assert_eq!(csv_escape("+SUM(A1)"), "\"'+SUM(A1)\"");
+        assert_eq!(csv_escape("@evil"), "\"'@evil\"");
+        assert_eq!(csv_escape("normal title"), "normal title");
+        // Delimiter quoting still works for ordinary content.
+        assert_eq!(csv_escape("a,b"), "\"a,b\"");
     }
 
     #[test]

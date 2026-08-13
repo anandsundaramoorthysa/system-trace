@@ -126,26 +126,49 @@ pub fn run() {
                     Ok(k) => k,
                     Err(e) => return Err(e.into()),
                 };
-                // If the snapshot can't be decrypted/loaded (wrong key or
-                // corruption), quarantine it and start fresh so the app still
-                // launches instead of panicking on every boot.
-                let conn = match db::open_encrypted(&enc_path, &key, &db_path) {
+                // Load the snapshot, distinguishing two very different failures:
+                //   * decrypt/deserialize failure  = the snapshot is corrupt or
+                //     the key is wrong -> quarantine it (kept, never deleted) and
+                //     start fresh, recording a recovery notice so the reset is
+                //     NOT silent.
+                //   * migration failure            = the data loaded fine but a
+                //     schema upgrade failed -> FAIL CLOSED. Never wipe intact
+                //     data; a fixed build recovers it.
+                let conn = match db::load_encrypted_image(&enc_path, &key, &db_path) {
                     Ok(c) => {
-                        let _ = db::prune_corrupt_snapshot(&enc_path);
+                        if let Err(e) = db::migrate(&c) {
+                            return Err(format!(
+                                "your data loaded but a database upgrade failed ({e}). \
+                                 To avoid any risk to your history, System Trace stopped \
+                                 instead of modifying it. Please update the app or seek \
+                                 help - your data is untouched."
+                            )
+                            .into());
+                        }
                         c
                     }
                     Err(e) => {
                         log::error!(
-                            "could not open encrypted database ({e}); quarantining it and starting fresh"
+                            "could not open encrypted snapshot ({e}); quarantining it and starting fresh"
                         );
+                        let mut quarantined: Option<std::path::PathBuf> = None;
                         if enc_path.exists() {
-                            let _ = std::fs::rename(
-                                &enc_path,
-                                enc_path.with_extension("enc.corrupt"),
+                            match db::quarantine_snapshot(&enc_path) {
+                                Ok(p) => quarantined = Some(p),
+                                Err(qe) => log::error!("could not quarantine snapshot: {qe}"),
+                            }
+                        }
+                        let fresh = db::open_encrypted(&enc_path, &key, &db_path)?;
+                        // Record the reset so the UI can surface a (non-silent)
+                        // recovery banner instead of the app appearing to start over.
+                        if let Some(p) = quarantined {
+                            let _ = db::set_setting(
+                                &fresh,
+                                "data_recovery_notice",
+                                &p.to_string_lossy(),
                             );
                         }
-                        db::open_encrypted(&enc_path, &key, &db_path)
-                            .expect("failed to open a fresh database")
+                        fresh
                     }
                 };
                 (conn, Some((enc_path.clone(), key)))
