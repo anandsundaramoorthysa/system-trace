@@ -76,7 +76,13 @@ pub fn apply(domains: &[String]) -> Result<usize, String> {
         next.push('\n');
         for d in domains {
             let d = d.trim();
-            if d.is_empty() {
+            // Defense in depth: patterns are validated on input, but never write
+            // a value here that isn't a bare token - a stray space, newline, or
+            // '#' could otherwise inject arbitrary hosts entries under elevation.
+            if d.is_empty()
+                || d.bytes()
+                    .any(|b| b.is_ascii_whitespace() || b.is_ascii_control() || b == b'#')
+            {
                 continue;
             }
             next.push_str(&format!("127.0.0.1 {d}\n"));
@@ -160,8 +166,24 @@ fn write_hosts(content: String) -> Result<(), String> {
 
     #[cfg(not(target_os = "linux"))]
     {
-        fs::write(&path, content)
-            .map_err(|e| format!("could not write hosts file (run as administrator): {e}"))?;
+        use std::io::Write;
+        // Write to a sibling temp file, flush it, then atomically rename over
+        // `hosts`. An in-place truncating `fs::write` could leave the user's
+        // ENTIRE hosts file truncated/empty if the process is killed or power is
+        // lost mid-write. `std::fs::rename` replaces atomically within a volume
+        // on both Windows and macOS.
+        let tmp = path.with_extension("systemtrace-tmp");
+        {
+            let mut f = fs::File::create(&tmp)
+                .map_err(|e| format!("could not write hosts file (run as administrator): {e}"))?;
+            f.write_all(content.as_bytes())
+                .map_err(|e| format!("could not write hosts file: {e}"))?;
+            let _ = f.sync_all();
+        }
+        fs::rename(&tmp, &path).map_err(|e| {
+            let _ = fs::remove_file(&tmp);
+            format!("could not replace hosts file (run as administrator): {e}")
+        })?;
         Ok(())
     }
 }
