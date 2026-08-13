@@ -43,6 +43,8 @@ A focused bug-fix and security release from a deep three-lens code audit
   injection under elevation).
 - File import/export/backup commands enforce an extension allow-list.
 - Database migrations run in a single transaction and stamp a schema version.
+- Decrypted-database and encryption-key buffers are zeroized from memory as soon
+  as they are no longer needed (defense in depth against memory-dump recovery).
 
 ## [0.5.0] - 2026-08-12 - Cross-platform parity: Wayland, hard-kill, custom categories
 

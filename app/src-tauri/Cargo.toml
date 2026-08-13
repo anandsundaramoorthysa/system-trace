@@ -54,6 +54,9 @@ keyring = { version = "3", features = [
     "crypto-rust",
 ] }
 rand = "0.8"
+# Scrub decrypted-database and key buffers from memory as soon as they are no
+# longer needed (defense in depth against memory-dump/forensic recovery).
+zeroize = "1"
 
 # Async runtime for the collector background task and scheduled services.
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }

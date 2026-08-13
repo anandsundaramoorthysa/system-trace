@@ -11,6 +11,7 @@ use chrono::{DateTime, Duration, Local, NaiveDate, TimeZone, Timelike};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::BTreeMap;
 use std::path::Path;
+use zeroize::Zeroizing;
 
 pub type DbResult<T> = Result<T, String>;
 
@@ -64,12 +65,14 @@ pub fn load_encrypted_image(
     let mut conn = Connection::open_in_memory().map_err(map_err)?;
     if enc_path.exists() {
         let blob = std::fs::read(enc_path).map_err(map_err)?;
-        let bytes = crate::crypto::decrypt(key, &blob)?;
+        // The decrypted image is the whole database in cleartext; scrub it from
+        // memory once it has been copied into the in-memory connection.
+        let bytes = Zeroizing::new(crate::crypto::decrypt(key, &blob)?);
         deserialize_into(&mut conn, &bytes)?;
     } else if legacy_plain.exists() {
         // Pre-encryption installs have a plaintext SQLite file; its raw bytes
         // are a valid serialized database, so load and (later) re-encrypt them.
-        let bytes = std::fs::read(legacy_plain).map_err(map_err)?;
+        let bytes = Zeroizing::new(std::fs::read(legacy_plain).map_err(map_err)?);
         if !bytes.is_empty() {
             deserialize_into(&mut conn, &bytes)?;
         }
@@ -108,6 +111,8 @@ pub fn snapshot_encrypted(
     key: &[u8; 32],
 ) -> DbResult<()> {
     use std::io::Write;
+    // NB: `conn.serialize` returns rusqlite's `Data` (SQLite-allocated memory
+    // that rusqlite frees on drop); it is not a `Vec` we can wrap in `Zeroizing`.
     let data = conn
         .serialize(rusqlite::DatabaseName::Main)
         .map_err(map_err)?;
