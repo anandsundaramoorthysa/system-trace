@@ -15,6 +15,7 @@ use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use rand::RngCore;
 use std::path::Path;
+use zeroize::Zeroizing;
 
 const KEYRING_SERVICE: &str = "com.systemtrace.app";
 const KEYRING_USER: &str = "db-encryption-key";
@@ -82,9 +83,9 @@ pub fn load_or_create_key(fallback_path: &Path, data_exists: bool) -> Result<[u8
 }
 
 fn read_key_file(path: &Path) -> Option<[u8; 32]> {
-    let bytes = std::fs::read(path).ok()?;
+    let bytes = Zeroizing::new(std::fs::read(path).ok()?);
     // Current format: OS-protected blob (DPAPI on Windows; raw on Unix).
-    if let Some(raw) = unprotect(&bytes) {
+    if let Some(raw) = unprotect(&bytes).map(Zeroizing::new) {
         if raw.len() == 32 {
             let mut k = [0u8; 32];
             k.copy_from_slice(&raw);
@@ -122,14 +123,17 @@ fn create_and_store(fallback_path: &Path) -> [u8; 32] {
 fn keyring_get() -> Result<Option<[u8; 32]>, String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER).map_err(|e| e.to_string())?;
     match entry.get_password() {
-        Ok(hex) => match from_hex(&hex) {
-            Some(bytes) if bytes.len() == 32 => {
-                let mut k = [0u8; 32];
-                k.copy_from_slice(&bytes);
-                Ok(Some(k))
+        Ok(hex) => {
+            let hex = Zeroizing::new(hex);
+            match from_hex(&hex).map(Zeroizing::new) {
+                Some(bytes) if bytes.len() == 32 => {
+                    let mut k = [0u8; 32];
+                    k.copy_from_slice(&bytes);
+                    Ok(Some(k))
+                }
+                _ => Err("stored key is malformed".into()),
             }
-            _ => Err("stored key is malformed".into()),
-        },
+        }
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(e) => Err(e.to_string()),
     }
@@ -137,7 +141,10 @@ fn keyring_get() -> Result<Option<[u8; 32]>, String> {
 
 fn keyring_set(key: &[u8; 32]) -> bool {
     match keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
-        Ok(entry) => entry.set_password(&to_hex(key)).is_ok(),
+        Ok(entry) => {
+            let hex = Zeroizing::new(to_hex(key));
+            entry.set_password(&hex).is_ok()
+        }
         Err(_) => false,
     }
 }
