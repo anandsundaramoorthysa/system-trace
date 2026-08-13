@@ -97,7 +97,7 @@ pub fn run() {
             let dir = app
                 .path()
                 .app_data_dir()
-                .expect("could not resolve app data dir");
+                .map_err(|e| format!("could not resolve app data dir: {e}"))?;
 
             let db_path = if is_test {
                 std::env::temp_dir().join("system-trace-test.sqlite")
@@ -202,8 +202,15 @@ pub fn run() {
                 settings.tracking_paused
             };
 
+            // Prefer the finer "Idle threshold (seconds)" control; fall back to
+            // the coarser "Idle timeout (minutes)" only when seconds is unset.
+            let idle_ms = if settings.idle_threshold_secs > 0 {
+                settings.idle_threshold_secs as u64 * 1000
+            } else {
+                settings.idle_timeout_mins as u64 * 60 * 1000
+            };
             let shared = Arc::new(Mutex::new(Shared::new(
-                settings.idle_timeout_mins as u64 * 60 * 1000,
+                idle_ms,
                 settings.capture_titles,
                 tracking_paused,
             )));
@@ -307,8 +314,7 @@ pub fn run() {
             let show = MenuItemBuilder::with_id("show", "Show System Trace").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
-            let _tray = TrayIconBuilder::with_id("main")
-                .icon(app.default_window_icon().unwrap().clone())
+            let mut tray_builder = TrayIconBuilder::with_id("main")
                 .tooltip("System Trace")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
@@ -326,8 +332,13 @@ pub fn run() {
                         app.exit(0);
                     }
                     _ => {}
-                })
-                .build(app)?;
+                });
+            // The bundled window icon should always be present; fall back
+            // gracefully rather than panicking the whole app if it isn't.
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            }
+            let _tray = tray_builder.build(app)?;
 
             Ok(())
         })

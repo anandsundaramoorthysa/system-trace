@@ -185,6 +185,13 @@ pub fn set_setting(
     // Mirror collector-affecting settings into the live shared state.
     let mut s = lock(&state.shared)?;
     match key.as_str() {
+        // Both idle controls drive the live idle threshold (last change wins);
+        // the seconds control is the finer one and is preferred at startup.
+        "idle_threshold_secs" => {
+            if let Ok(v) = value.parse::<u64>() {
+                s.idle_threshold_ms = v * 1000;
+            }
+        }
         "idle_timeout_mins" => {
             if let Ok(v) = value.parse::<u64>() {
                 s.idle_threshold_ms = v * 60 * 1000;

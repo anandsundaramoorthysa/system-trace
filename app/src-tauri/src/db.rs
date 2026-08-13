@@ -1513,8 +1513,19 @@ pub fn import_data(conn: &Connection, path: &str) -> DbResult<ImportResult> {
 }
 
 pub fn wipe_all_data(conn: &Connection) -> DbResult<WipeResult> {
+    // A "wipe all data" must also remove user-authored content that does not
+    // cascade off `app`: focus sessions (with their free-text notes), block
+    // rules, and category goals. Otherwise those survive a wipe (a privacy
+    // surprise). Categories themselves are config (seeded defaults), so they
+    // are left in place.
     conn.execute_batch(
-        "DELETE FROM event; DELETE FROM daily_app_usage; DELETE FROM app; DELETE FROM exclusion;",
+        "DELETE FROM event;
+         DELETE FROM daily_app_usage;
+         DELETE FROM app;
+         DELETE FROM exclusion;
+         DELETE FROM focus_session;
+         DELETE FROM block_rule;
+         DELETE FROM category_goal;",
     )
     .map_err(map_err)?;
     Ok(WipeResult { ok: true })
