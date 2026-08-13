@@ -400,6 +400,7 @@ pub fn run() {
             commands::get_focus_state,
             commands::apply_website_block,
             commands::clear_website_block,
+            commands::is_store_build,
             commands::get_hotkey_status,
             commands::focus_main_window,
             commands::save_report_pdf,

@@ -547,3 +547,12 @@ pub fn apply_website_block(state: State<AppState>) -> R<usize> {
 pub fn clear_website_block() -> R<()> {
     crate::blocker::clear()
 }
+
+/// Whether this is the Microsoft Store edition (built with the `msstore`
+/// feature), in which system-wide website blocking is compiled out. The
+/// frontend uses this to disable the hosts-file blocking controls and explain
+/// that the feature is unavailable in the Store edition.
+#[tauri::command]
+pub fn is_store_build() -> bool {
+    cfg!(feature = "msstore")
+}

@@ -108,6 +108,13 @@ nix = { version = "0.29.0", features = ["signal", "process"] }
 # By default Tauri uses a custom-protocol on all platforms; this feature is
 # enabled by the Tauri CLI for production builds.
 custom-protocol = ["tauri/custom-protocol"]
+# Microsoft Store edition. Compiles out the hosts-file website-blocking code
+# entirely (see src/blocker.rs), because it needs administrator rights and edits
+# a protected system file, which the Microsoft Store certification policy
+# disallows. Everything else (tracking, per-app limits, focus, wellbeing,
+# reports, categories) is unaffected. Build with:
+# `pnpm tauri build -- --features msstore`.
+msstore = []
 
 [profile.release]
 # Keep the always-on agent small and lean (CONVENTIONS.md performance guardrails).

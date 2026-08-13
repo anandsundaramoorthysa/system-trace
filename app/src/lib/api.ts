@@ -352,6 +352,16 @@ export function clearWebsiteBlock(): Promise<void> {
   return invoke(COMMAND.CLEAR_WEBSITE_BLOCK);
 }
 
+/**
+ * Whether this is the Microsoft Store edition, where system-wide website
+ * blocking is compiled out (it needs admin rights and edits the hosts file,
+ * which Store policy disallows). The UI uses this to disable those controls.
+ */
+export function isStoreBuild(): Promise<boolean> {
+  if (!isTauri) return Promise.resolve(false);
+  return invoke(COMMAND.IS_STORE_BUILD);
+}
+
 /* --------------------------------- events --------------------------------- */
 
 /** Subscribe to the throttled live `usage_tick`. Returns an unlisten function. */
